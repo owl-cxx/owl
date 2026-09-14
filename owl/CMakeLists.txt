@@ -120,6 +120,10 @@ endif ()
 
 add_executable(raw_h2o_bench "${CMAKE_CURRENT_SOURCE_DIR}/bench/raw_h2o_server.c")
 target_compile_definitions(raw_h2o_bench PRIVATE H2O_USE_LIBUV=0)
+# Kept out of compile_commands.json: clangd lends a header the flags of the
+# nearest listed source, and this C bench, with neither the owl nor the coro
+# include paths, is nearest for some of owl/include. It still builds.
+set_target_properties(raw_h2o_bench PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
 target_link_libraries(raw_h2o_bench PRIVATE
         PkgConfig::H2O
         OpenSSL::SSL

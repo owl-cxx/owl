@@ -1,4 +1,14 @@
 CompileFlags:
   CompilationDatabase: cmake-build-debug
-  Add: [-std=c++23, -stdlib=libc++]
-QueryDriver: /usr/bin/c++
+  # h2o lives under /usr/local. The driver searches it on its own, but clangd
+  # adds -isysroot on macOS, which moves that default under the SDK; an
+  # explicit path is not moved. QueryDriver would also do, but it is a
+  # user-config key, unknown in a project file.
+  Add: [-isystem/usr/local/include]
+---
+# A header borrows its flags from the nearest source in the database, which
+# for some of owl/include is the C bench, so the language is pinned here.
+If:
+  PathMatch: [.*\.h, .*\.cpp]
+CompileFlags:
+  Add: [-xc++, -std=c++23, -stdlib=libc++]
