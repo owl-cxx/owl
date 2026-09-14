@@ -22,6 +22,7 @@
 #include "owl/routing/middleware.h"
 #include "owl/routing/router.h"
 #include "owl/server.h"
+#include "owl/util/base64.h"
 #include "owl/util/pool_map.h"
 #include "owl/util/util.h"
 #include "owl/ws/controller.h"

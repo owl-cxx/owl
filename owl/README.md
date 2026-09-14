@@ -182,6 +182,37 @@ auto router = owl::Router<AppState>::make()
 
 A preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) gets `204` from the layer and never reaches `next`. Any other request with an `Origin` runs through and, when the origin is granted, has `Access-Control-Allow-Origin` stamped on the way out: `*` when any origin is allowed, else the origin echoed with `Origin` merged into `Vary`. A request without an `Origin`, or from an origin not listed, is served untouched: the browser enforces CORS, not the server. A preflight to a path that does not exist gets a bare 404, since no chain runs for it.
 
+### Basic auth
+
+`owl::basic_auth` is a layer too. It guards whatever it is attached to: the whole server, one router, or one nested prefix.
+
+```cpp
+auto admin = owl::Router<AppState>::make()
+             .layer(owl::basic_auth({.realm = "admin", .users = {{"alice", "s3cret"}}}))
+             .route<"/stats">(owl::get(stats));
+
+auto api = owl::Router<AppState>::make()
+           .layer(owl::basic_auth({.verify = [](std::string_view user, std::string_view password) {
+               return user == "svc" && password == std::getenv("SVC_TOKEN");
+           }}))
+           .route<"/ping">(owl::get(ping));
+
+// or from the environment: OWL_BASIC_USERS=alice:s3cret,bob:hunter2 [OWL_BASIC_REALM=admin]
+.layer(owl::basic_auth(owl::BasicAuth::make()))
+```
+
+| `BasicAuth` field | default        | meaning                                                                                              |
+|-------------------|----------------|------------------------------------------------------------------------------------------------------|
+| `realm`           | `"restricted"` | the label in the challenge; a browser keys its saved credentials on it, an API client ignores it    |
+| `users`           | empty          | user to password; passwords are compared in constant time                                            |
+| `verify`          | unset          | `bool(user, password)`, consulted when `users` does not admit; runs on the worker loop, so no blocking |
+
+A request passes when a listed user sends the matching password, or `verify` says yes. Anything else, a missing header included, gets `401` with `WWW-Authenticate: Basic realm="…", charset="UTF-8"` and never reaches `next`. Constructing with neither `users` nor `verify`, or with a realm that cannot sit in a quoted string, throws `std::invalid_argument`.
+
+`BasicAuth::make()` reads `OWL_BASIC_USERS` as `user:password` pairs separated by commas (the first colon splits, so a password may hold colons but not commas) and `OWL_BASIC_REALM` when set. Unset, empty, malformed or repeated entries throw.
+
+A handler that needs the name behind a request takes `HeaderView<"authorization">` and calls `owl::parse_basic` on it, the same parser the layer uses.
+
 ## WebSocket
 
 A path takes a send/recv coroutine or a shared controller. Extractors run before the upgrade — the request is gone at 101 — so they must own their values (`Path<"n", std::string>`, not `PathView`). `const T&` is allowed only for driver and loop refs, which outlive the connection on their worker. `owl::get` and `.ws` may share a pattern; a GET without Upgrade on a WS-only path is 404. A handshake that offers a version other than 13 gets 426 with `Sec-WebSocket-Version: 13`; a missing or malformed key gets 400. One controller instance is built at registration and reached from every worker, so it must be safe for concurrent use, the same contract `State<T>` carries. A `Socket` may be copied, kept (in a map, say) and sent to from any worker: a send from another thread is posted to the connection's own worker, and a send or close on a connection that has ended does nothing. `recv()` belongs to the connection's handler, on its own worker. `send` is awaitable so it can gain backpressure later; until then, a connection with more than 64 MiB queued for its peer is dropped. Reading pauses while a handler has 16 MiB of messages it has not taken, and one inbound message may be at most 16 MiB (1009 past it). A connection that goes quiet for 30 s is pinged, and dropped if nothing comes back within another 30 s; the same bound ends a close handshake the peer never answers.
@@ -269,7 +300,7 @@ Each box below is one turn of that worker's `h2o_evloop_run`:
 | Directory  | Holds                                                                                       |
 |------------|---------------------------------------------------------------------------------------------|
 | `core/`    | vocabulary types: `Method`, `Config`, `State`, `Context`, `KickToken` |
-| `util/`    | `pool_map`, string helpers                                                                  |
+| `util/`    | `pool_map`, string helpers, base64                                                          |
 | `http/`    | `Request`, `Response`, cookies, reason phrases; `detail/` for send/finish                   |
 | `extract/` | parsing, extractor types, and the `FromContext` dispatch                                    |
 | `routing/` | the route trie, `Router`, middleware                                                        |
