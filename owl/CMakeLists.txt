@@ -26,6 +26,7 @@ target_sources(owl INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/extract/extractors.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/extract/from_context.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/extract/parse.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/http/auth.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/http/cookie.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/http/detail/finish.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/http/policy.h"
@@ -36,6 +37,7 @@ target_sources(owl INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/detail/pattern.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/detail/traits.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/detail/trie.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/basic_auth.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/cors.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/middleware.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/router.h"
@@ -146,6 +148,7 @@ if (BUILD_TESTING)
     owl_add_test(test_router_rejections)
     owl_add_test(test_middleware)
     owl_add_test(test_cors)
+    owl_add_test(test_basic_auth)
     owl_add_test(test_base64)
     owl_add_test(test_loop_scheduler)
     owl_add_test(test_loop_reactor)
