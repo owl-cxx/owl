@@ -18,6 +18,7 @@
 #include "owl/http/policy.h"
 #include "owl/http/request.h"
 #include "owl/http/response.h"
+#include "owl/routing/cors.h"
 #include "owl/routing/middleware.h"
 #include "owl/routing/router.h"
 #include "owl/server.h"

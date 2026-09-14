@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <memory>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -465,12 +466,24 @@ namespace owl {
 
         void insert(const Method method, const std::string_view pattern, Handler<S> handler) {
             detail::RouteNode<S>& node = claim(pattern);
-            if (node.handler_for(method)) {
+            if (node.registered(method)) {
                 throw std::invalid_argument(std::format("cannot register {}: {} is already registered", pattern, method));
             }
             node.handlers.emplace_back(method, std::move(handler));
             node.pattern = std::string(pattern);
             ++size_;
+            refresh_options_fallback(node);
+        }
+
+        // The Allow line is fixed here, once per registration, rather than
+        // walked out of the node per request.
+        static void refresh_options_fallback(detail::RouteNode<S>& node) {
+            MethodSet allowed;
+            for (const auto& method : node.handlers | std::views::keys) allowed.add(method);
+            allowed.add(Method::Options);
+            node.options_fallback = [allow = allowed.to_allow_header()](const Request&, const Context<S>&) -> coro::task<Response> {
+                return detail::ready(Response::no_content().header("allow", allow));
+            };
         }
 
         void insert_ws(const std::string_view pattern, Handler<S> handler) {

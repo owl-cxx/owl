@@ -44,18 +44,34 @@ namespace owl::detail {
         // path. Empty means none -- WS is not an HTTP method and does not
         // live in handlers.
         Handler<S> websocket;
+        // Answers OPTIONS on a node that registered methods but not that
+        // one: 204 with Allow, which is what OPTIONS asks (RFC 9110 §9.3.7).
+        // It exists so a CORS preflight reaches the layers instead of the
+        // 405 that dispatch sends before any chain runs. Rebuilt by the
+        // router on every registration at this node, so Allow is final by
+        // the time a request arrives and matching pays nothing for it.
+        Handler<S> options_fallback;
         // Registered template for this node: the full path, prefix included.
         std::string pattern;
         MiddlewareChain<S> middleware;
 
         // The Upgrade slot when the request asked for it and the node has
-        // one; the method's handler otherwise.
+        // one; the method's handler otherwise; for OPTIONS, the fallback
+        // when nothing was registered.
         [[nodiscard]] const Handler<S>* handler_for(const Method method, const bool upgrade = false) const noexcept {
             if (upgrade && websocket) return &websocket;
             for (const auto& [key, handler] : handlers) {
                 if (key == method) return &handler;
             }
+            if (method == Method::Options && options_fallback) return &options_fallback;
             return nullptr;
+        }
+
+        // What was registered, fallback excluded: the duplicate check
+        // must not read the OPTIONS the node answers on its own as a
+        // second registration.
+        [[nodiscard]] bool registered(const Method method) const noexcept {
+            return std::ranges::contains(handlers | std::views::keys, method);
         }
 
         // Where text sorts among the literal children: the child with that
@@ -165,6 +181,8 @@ namespace owl::detail {
                          MethodSet& out) noexcept {
         if (index == count) {
             for (const auto& method : node.handlers | std::views::keys) out.add(method);
+            // Served by the fallback whenever anything else is.
+            if (!node.handlers.empty()) out.add(Method::Options);
             return;
         }
         if (const RouteNode<S>* child = node.find_literal(segments[index])) {

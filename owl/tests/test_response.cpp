@@ -137,6 +137,18 @@ TEST(Response, StatusIsReadableAfterBuild) {
     EXPECT_EQ(response.status(), 201);
 }
 
+TEST(Response, HeaderIsReadableAfterBuild) {
+    const auto response = owl::Response::ok("hi").header("X-Trace", "abc");
+    EXPECT_EQ(response.header("x-trace"), "abc");
+    EXPECT_EQ(response.header("X-TRACE"), "abc");
+    EXPECT_FALSE(response.header("x-none").has_value());
+}
+
+TEST(Response, FactoryContentTypeIsReadable) {
+    const auto response = owl::Response::json("{}");
+    EXPECT_EQ(response.header("Content-Type"), "application/json");
+}
+
 TEST(Response, MapsUnknownStatusToUnknownReason) {
     Fixture fixture;
     fixture.run(owl::Response::ok("x", 599).send(&fixture.req));

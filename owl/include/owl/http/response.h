@@ -6,6 +6,7 @@
 // would leave Content-Type unset.
 
 #include <concepts>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -23,6 +24,7 @@
 #include "cookie.h"
 #include "detail/finish.h"
 #include "policy.h"
+#include "owl/util/util.h"
 #include "owl/ws/detail/upgrade.h"
 
 namespace owl {
@@ -117,6 +119,17 @@ namespace owl {
         auto&& header(this Self&& self, const std::string_view name, const std::string_view value) {
             self.add_header(name, value);
             return std::forward<Self>(self);
+        }
+
+        // What a layer on the way out sees of a header set further in, so
+        // it can merge (Vary) rather than clobber. Names are kept as given
+        // and compared case-insensitively, as on the wire; a scan of a
+        // handful of entries costs less than normalising every insert.
+        [[nodiscard]] std::optional<std::string_view> header(const std::string_view name) const noexcept {
+            for (const auto& [key, value] : headers_) {
+                if (util::eq_ci(key, name)) return std::string_view{value};
+            }
+            return std::nullopt;
         }
 
         template <typename Self>

@@ -157,6 +157,31 @@ auto router = owl::Router<AppState>::make()
 
 `Server::Builder::layer` is the outermost chain (MatchedChains slot 0). Nested `Router::layer` runs only under that prefix.
 
+Layers run only when a route matched. A path nobody registered is answered 404, and a registered path asked for a method it lacks 405 with `Allow`, both before any chain runs. OPTIONS is the exception: a route that registered any method answers OPTIONS itself with `204` and `Allow` (RFC 9110 §9.3.7), through its layers, unless it registered `.options(h)` of its own. That is what lets a CORS preflight reach a layer at all.
+
+### CORS
+
+`owl::cors` is a layer. Put it outermost, so a preflight is answered before an auth layer can 401 an OPTIONS that by design carries no credentials.
+
+```cpp
+auto router = owl::Router<AppState>::make()
+              .layer(owl::cors({.origins = {"https://app.example.com"}, .credentials = true}))
+              .layer(require_bearer)
+              .route<"/ping">(owl::get(ping));
+// server-wide, and permissive: Server<AppState>::builder().layer(owl::cors({}))
+```
+
+| `Cors` field  | default  | meaning                                                                                       |
+|---------------|----------|-----------------------------------------------------------------------------------------------|
+| `origins`     | `{"*"}`  | exact `scheme://host[:port]` strings; `"*"` grants any                                        |
+| `methods`     | empty    | `Access-Control-Allow-Methods` on a preflight; empty mirrors the requested method             |
+| `headers`     | empty    | `Access-Control-Allow-Headers` on a preflight; empty mirrors the requested headers            |
+| `expose`      | empty    | `Access-Control-Expose-Headers`                                                               |
+| `credentials` | `false`  | `Access-Control-Allow-Credentials: true`; refused with `"*"` (`std::invalid_argument`)        |
+| `max_age`     | unset    | `Access-Control-Max-Age`, in seconds                                                          |
+
+A preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) gets `204` from the layer and never reaches `next`. Any other request with an `Origin` runs through and, when the origin is granted, has `Access-Control-Allow-Origin` stamped on the way out: `*` when any origin is allowed, else the origin echoed with `Origin` merged into `Vary`. A request without an `Origin`, or from an origin not listed, is served untouched: the browser enforces CORS, not the server. A preflight to a path that does not exist gets a bare 404, since no chain runs for it.
+
 ## WebSocket
 
 A path takes a send/recv coroutine or a shared controller. Extractors run before the upgrade — the request is gone at 101 — so they must own their values (`Path<"n", std::string>`, not `PathView`). `const T&` is allowed only for driver and loop refs, which outlive the connection on their worker. `owl::get` and `.ws` may share a pattern; a GET without Upgrade on a WS-only path is 404. A handshake that offers a version other than 13 gets 426 with `Sec-WebSocket-Version: 13`; a missing or malformed key gets 400. One controller instance is built at registration and reached from every worker, so it must be safe for concurrent use, the same contract `State<T>` carries. A `Socket` may be copied, kept (in a map, say) and sent to from any worker: a send from another thread is posted to the connection's own worker, and a send or close on a connection that has ended does nothing. `recv()` belongs to the connection's handler, on its own worker. `send` is awaitable so it can gain backpressure later; until then, a connection with more than 64 MiB queued for its peer is dropped. Reading pauses while a handler has 16 MiB of messages it has not taken, and one inbound message may be at most 16 MiB (1009 past it). A connection that goes quiet for 30 s is pinged, and dropped if nothing comes back within another 30 s; the same bound ends a close handshake the peer never answers.
