@@ -24,27 +24,21 @@ namespace owl::detail {
 
     struct PatternInfo {
         bool ok = false;
-        const char* error = "uninitialised";
         std::size_t count = 0;
         std::size_t params = 0;
         std::array<Segment, max_path_segments> segments{};
     };
 
+    // Every early return is a rejected pattern; the comment on each says
+    // why. The reason stays a comment: a static_assert cannot show a
+    // runtime string, so nothing would read it.
     [[nodiscard]] constexpr PatternInfo
     parse_pattern(const std::string_view pattern) noexcept {
         PatternInfo info{};
-        if (pattern.empty()) {
-            info.error = "pattern is empty";
-            return info;
-        }
-        if (pattern.front() != '/') {
-            info.error = "pattern must start with '/'";
-            return info;
-        }
+        if (pattern.empty() || pattern.front() != '/') return info; // must start with '/'
         if (pattern.size() == 1) {
             // "/" is the root: zero segments, which is a valid route.
             info.ok = true;
-            info.error = nullptr;
             return info;
         }
 
@@ -55,65 +49,41 @@ namespace owl::detail {
             while (i < n && pattern[i] != '/') ++i;
             const std::string_view seg = pattern.substr(start, i - start);
 
-            if (seg.empty()) {
-                info.error = "empty path segment";
-                return info;
-            }
-            if (info.count >= max_path_segments) {
-                info.error = "too many segments";
-                return info;
-            }
+            if (seg.empty()) return info; // "//", or a trailing '/'
+            if (info.count >= max_path_segments) return info; // too many segments
 
             if (seg.front() == '{') {
-                if (seg.back() != '}') {
-                    info.error = "unterminated '{' in segment";
-                    return info;
-                }
+                if (seg.back() != '}') return info; // unterminated '{'
                 const std::string_view name = seg.substr(1, seg.size() - 2);
-                if (name.empty()) {
-                    info.error = "empty parameter name";
-                    return info;
-                }
+                if (name.empty()) return info; // "{}"
                 for (const char c : name) {
-                    if (!util::is_word_char(c)) {
-                        info.error = "invalid character in parameter name";
-                        return info;
-                    }
+                    if (!util::is_word_char(c)) return info; // not a word character
                 }
                 for (std::size_t k = 0; k < info.count; ++k) {
-                    if (info.segments[k].is_param && info.segments[k].text == name) {
-                        info.error = "duplicate parameter name";
-                        return info;
-                    }
+                    if (info.segments[k].is_param && info.segments[k].text == name) return info; // duplicate name
                 }
-                if (info.params >= max_path_params) {
-                    info.error = "too many parameters";
-                    return info;
-                }
+                if (info.params >= max_path_params) return info; // too many parameters
                 ++info.params;
                 info.segments[info.count++] = Segment{name, true};
             } else {
                 for (const char c : seg) {
-                    if (c == '{' || c == '}') {
-                        info.error = "brace inside a literal segment";
-                        return info;
-                    }
+                    if (c == '{' || c == '}') return info; // a brace inside a literal
                 }
                 info.segments[info.count++] = Segment{seg, false};
             }
         }
 
         info.ok = true;
-        info.error = nullptr;
         return info;
     }
 
-    // Splits a request path into segments. Returns npos for anything that
-    // cannot match: no leading '/', an empty segment, or too many.
+    // What split_path answers for a path that cannot match any route.
+    inline constexpr std::size_t no_match = std::string_view::npos;
+
+    // Splits a request path into segments. Returns no_match for anything
+    // that cannot match: no leading '/', an empty segment, or too many.
     [[nodiscard]] inline std::size_t
     split_path(const std::string_view path, std::string_view* out, const std::size_t cap) noexcept {
-        constexpr auto no_match = static_cast<std::size_t>(-1);
-
         if (path.empty() || path.front() != '/') [[unlikely]] return no_match;
         if (path.size() == 1) return 0; // "/" is the root
 

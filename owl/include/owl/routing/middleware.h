@@ -41,8 +41,7 @@ namespace owl {
     class Next final {
     public:
         Next(const detail::ChainSpan<S> chains, const Handler<S>* handler, const Context<S>* ctx) noexcept
-            : chains_(chains.data),
-              chain_count_(chains.count),
+            : chains_(chains),
               handler_(handler),
               ctx_(ctx) {
         }
@@ -50,34 +49,20 @@ namespace owl {
         [[nodiscard]] coro::task<Response> operator()(const Request& req) const {
             std::size_t chain = chain_index_;
             std::size_t item = item_index_;
-            while (chain < chain_count_ && item >= chains_[chain]->size()) {
+            while (chain < chains_.count && item >= chains_.data[chain]->size()) {
                 ++chain;
                 item = 0;
             }
-            if (chain >= chain_count_) return (*handler_)(req, *ctx_);
-            const Middleware<S>& current = (*chains_[chain])[item];
-            return current(req, *ctx_, Next{chains_, chain_count_, chain, item + 1, handler_, ctx_});
+            if (chain >= chains_.count) return (*handler_)(req, *ctx_);
+            // The continuation is this, one item further along.
+            Next rest = *this;
+            rest.chain_index_ = chain;
+            rest.item_index_ = item + 1;
+            return (*chains_.data[chain])[item](req, *ctx_, rest);
         }
 
     private:
-        Next(
-            const MiddlewareChain<S>* const* chains,
-            const std::size_t chain_count,
-            const std::size_t chain_index,
-            const std::size_t item_index,
-            const Handler<S>* handler,
-            const Context<S>* ctx
-        ) noexcept
-            : chains_(chains),
-              chain_count_(chain_count),
-              chain_index_(chain_index),
-              item_index_(item_index),
-              handler_(handler),
-              ctx_(ctx) {
-        }
-
-        const MiddlewareChain<S>* const* chains_;
-        std::size_t chain_count_;
+        detail::ChainSpan<S> chains_;
         std::size_t chain_index_ = 0;
         std::size_t item_index_ = 0;
         const Handler<S>* handler_;

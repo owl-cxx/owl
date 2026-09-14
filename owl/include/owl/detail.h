@@ -90,16 +90,11 @@ namespace owl::detail {
             const Next<S> next{chains->splice(server_layers), handler, context};
             auto response = co_await next(*request);
             if (response.is_upgrade()) {
-                auto session = std::make_unique<ws::detail::Session>();
-                const auto upgrade = std::move(response).stage_upgrade(request->raw());
-                ws::detail::adopt(session.get(), upgrade->make(session.get()));
-                const int status = ws::detail::upgrade(*request, std::move(session), &context->ws_hop);
+                const int status = ws::detail::upgrade(*request, std::move(response).stage_upgrade(request->raw()), &context->hop);
                 exchange.matched(*request, status);
-                if (status == 426) {
-                    // KEEP_HEADERS: the Sec-WebSocket-Version upgrade() staged is the answer.
-                    h2o_send_error_generic(request->raw(), 426, "Upgrade Required", "Upgrade Required", H2O_SEND_ERROR_KEEP_HEADERS);
-                } else if (status != 101) {
-                    send_error_floor(request->raw(), status);
+                if (status != 101) {
+                    // KEEP_HEADERS: the Sec-WebSocket-Version upgrade() staged is the 426's answer.
+                    send_error_floor(request->raw(), status, status == 426 ? H2O_SEND_ERROR_KEEP_HEADERS : 0);
                 }
                 // Upgraded: the request is h2o's now. The 101's write completes on a
                 // later loop pass -- evloop defers write callbacks through its pending
@@ -165,10 +160,10 @@ namespace owl::detail {
         // The scheduler, its hop and the reactor are born with the Context so
         // extraction hands handlers a working loop from the first request on;
         // the hop is registered on this context's queue, which is what makes
-        // post() safe from the pool threads.
+        // post() safe from the pool threads and a WebSocket send safe from
+        // another worker.
         auto* const context = new Context<S>{dispatcher->state, ctx->loop};
         h2o_multithread_register_receiver(ctx->queue, &context->hop, &on_loop_hop);
-        h2o_multithread_register_receiver(ctx->queue, &context->ws_hop, &ws::detail::on_post);
 
         // Each driver holds a handle to a member of this Context, so
         // they are built now rather than with it; how is drivers.h's.
@@ -191,7 +186,6 @@ namespace owl::detail {
         // The receiver is linked into this context's queue; unlink it before
         // the Context that owns it dies.
         h2o_multithread_unregister_receiver(ctx->queue, &context->hop);
-        h2o_multithread_unregister_receiver(ctx->queue, &context->ws_hop);
         delete context;
     }
 

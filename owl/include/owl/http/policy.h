@@ -17,6 +17,7 @@ namespace owl::policy {
         case 409: return "Conflict";
         case 415: return "Unsupported Media Type";
         case 422: return "Unprocessable Content";
+        case 426: return "Upgrade Required";
         case 429: return "Too Many Requests";
         case 500: return "Internal Server Error";
         case 501: return "Not Implemented";

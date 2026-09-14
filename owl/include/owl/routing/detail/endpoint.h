@@ -14,12 +14,9 @@
 namespace owl::detail {
     template <Method M, typename R, typename... Args>
     struct Endpoint {
-        static constexpr Method method = M;
-
         R (*handler)(Args...);
     };
 
     template <class R>
-    inline constexpr bool is_handler_return_v =
-        std::is_same_v<R, Response> || std::is_same_v<R, coro::task<Response>>;
+    inline constexpr bool is_handler_return_v = std::is_same_v<R, Response> || std::is_same_v<R, coro::task<Response>>;
 }

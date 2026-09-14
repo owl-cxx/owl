@@ -15,7 +15,7 @@ namespace owl::detail {
     // plus the extractors belonging to this connection alone.
     //
     // The shared_ptr is passed into the connection's frame, not just held
-    // here: this object dies with the Response, and a frame that only
+    // here: this object dies with upgrade()'s call, and a frame that only
     // borrowed the instance would depend on the Router outliving every
     // connection. One refcount per connection buys that independence.
     //
@@ -49,7 +49,7 @@ namespace owl::detail {
         }
 
         // The task is lazy, so the values move into its frame here --
-        // before this object, owned by the Response, is gone.
+        // before this object, owned by upgrade()'s call, is gone.
         [[nodiscard]] coro::task<void> make(ws::detail::Session* session) override {
             return std::apply([this, session]<typename... Arg>(Arg&&... arg) {
                 return start(ws::Socket{session->handle}, std::forward<Arg>(arg)...);

@@ -100,6 +100,12 @@ namespace owl {
             param_count_ = 0;
         }
 
+        // Drops the parameters added since param_count() was `count`: the
+        // router backing out of a branch that did not match.
+        void truncate_params(const std::size_t count) noexcept {
+            param_count_ = count;
+        }
+
         [[nodiscard]] std::size_t param_count() const noexcept {
             return param_count_;
         }

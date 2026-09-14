@@ -15,7 +15,6 @@
 #include <cstddef>
 #include <memory>
 #include <ranges>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -45,35 +44,38 @@ namespace owl::detail {
         // path. Empty means none -- WS is not an HTTP method and does not
         // live in handlers.
         Handler<S> websocket;
-        // Registered template for this node. graft() prefixes nested
-        // tries so /api/v1 + /ping stays "/api/v1/ping", not "/ping".
+        // Registered template for this node: the full path, prefix included.
         std::string pattern;
         MiddlewareChain<S> middleware;
 
-        [[nodiscard]] const Handler<S>* handler_for(const Method method) const noexcept {
+        // The Upgrade slot when the request asked for it and the node has
+        // one; the method's handler otherwise.
+        [[nodiscard]] const Handler<S>* handler_for(const Method method, const bool upgrade = false) const noexcept {
+            if (upgrade && websocket) return &websocket;
             for (const auto& [key, handler] : handlers) {
                 if (key == method) return &handler;
             }
             return nullptr;
         }
 
-        [[nodiscard]] RouteNode* find_literal(const std::string_view text) const noexcept {
-            const auto pos = std::ranges::lower_bound(literals, text, {}, [](const auto& node) {
+        // Where text sorts among the literal children: the child with that
+        // label when there is one, else where it would go.
+        [[nodiscard]] auto literal_pos(const std::string_view text) const noexcept {
+            return std::ranges::lower_bound(literals, text, {}, [](const auto& node) {
                 return std::string_view{node->label};
             });
-            if (pos != literals.end() && (*pos)->label == text) return pos->get();
-            return nullptr;
+        }
+
+        [[nodiscard]] RouteNode* find_literal(const std::string_view text) const noexcept {
+            const auto pos = literal_pos(text);
+            return pos != literals.end() && (*pos)->label == text ? pos->get() : nullptr;
         }
 
         RouteNode& literal_child(const std::string_view text) {
-            const auto pos = std::ranges::lower_bound(
-                literals, text, {}, [](const auto& node) {
-                    return std::string_view{node->label};
-                });
-            if (pos != literals.end() && (*pos)->label == text) return **pos;
+            if (RouteNode* const found = find_literal(text)) return *found;
             auto child = std::make_unique<RouteNode>();
             child->label = std::string(text);
-            return **literals.insert(pos, std::move(child));
+            return **literals.insert(literal_pos(text), std::move(child));
         }
     };
 
@@ -111,69 +113,56 @@ namespace owl::detail {
         }
     };
 
+    // One request's walk down the trie: the segments its path split into,
+    // what it asked for, and the two things a match fills in as it goes --
+    // the Request's parameters and the chains passed on the way. Both are
+    // written in place and cut back on backtrack, so a branch that fails
+    // leaves nothing behind for the next one tried.
     template <typename S>
-    [[nodiscard]] const Handler<S>*
-    descend(
-        const RouteNode<S>& node,
-        const std::string_view* segments,
-        const std::size_t count,
-        const std::size_t index,
-        const Method method,
-        const bool websocket,
-        PathParam* captures,
-        std::size_t& captured,
-        MatchedChains<S>* chains,
-        std::string_view* route
-    ) {
-        if (index == count) {
-            if (websocket && static_cast<bool>(node.websocket)) {
-                if (route != nullptr) *route = node.pattern;
-                return &node.websocket;
-            }
-            if (const Handler<S>* handler = node.handler_for(method)) {
-                if (route != nullptr) *route = node.pattern;
+    struct Walk {
+        const std::string_view* segments;
+        std::size_t count;
+        Method method;
+        bool websocket;
+        Request& req;
+        MatchedChains<S>& chains;
+
+        [[nodiscard]] const Handler<S>* descend(const RouteNode<S>& node, const std::size_t index) {
+            if (index == count) {
+                const Handler<S>* const handler = node.handler_for(method, websocket);
+                if (handler != nullptr) req.set_route_pattern(node.pattern);
                 return handler;
             }
+            if (const RouteNode<S>* child = node.find_literal(segments[index])) {
+                if (const Handler<S>* handler = enter(*child, index)) return handler;
+            }
+            if (node.param) return enter(*node.param, index);
             return nullptr;
         }
 
-        if (const RouteNode<S>* child = node.find_literal(segments[index])) {
-            const std::size_t mark = captured;
-            const std::size_t chain_mark = chains != nullptr ? chains->count : 0;
-            if (chains != nullptr) chains->push(&child->middleware);
-            if (const Handler<S>* handler = descend(*child, segments, count, index + 1, method, websocket, captures, captured, chains, route)) {
-                return handler;
-            }
-            captured = mark;
-            if (chains != nullptr) chains->count = chain_mark;
+        // Steps into child for segments[index], undoing what the step
+        // recorded if nothing below it matches. A parameter child is the
+        // one with a name; the capture cap is add_param's.
+        [[nodiscard]] const Handler<S>* enter(const RouteNode<S>& child, const std::size_t index) {
+            const std::size_t params = req.param_count();
+            const std::size_t pushed = chains.count;
+            chains.push(&child.middleware);
+            if (!child.param_name.empty()) req.add_param(child.param_name, segments[index]);
+            if (const Handler<S>* handler = descend(child, index + 1)) return handler;
+            req.truncate_params(params);
+            chains.count = pushed;
+            return nullptr;
         }
+    };
 
-        if (node.param) {
-            const std::size_t mark = captured;
-            const std::size_t chain_mark = chains != nullptr ? chains->count : 0;
-            if (chains != nullptr) chains->push(&node.param->middleware);
-            if (captured < max_path_params) {
-                captures[captured++] = {.name = std::string_view{node.param->param_name}, .value = segments[index]};
-            }
-            if (const Handler<S>* handler = descend(*node.param, segments, count, index + 1, method, websocket,
-                                                    captures, captured, chains, route)) {
-                return handler;
-            }
-            captured = mark;
-            if (chains != nullptr) chains->count = chain_mark;
-        }
-
-        return nullptr;
-    }
-
-    // Collects every method reachable at this path. Unlike descend() it
-    // does not stop at the first hit and does not backtrack away from a
+    // Collects every method reachable at this path. Unlike a Walk it does
+    // not stop at the first hit and does not backtrack away from a
     // subtree: a request can route through either the literal child or the
     // parameter child, so Allow is the union of both.
     template <typename S>
-    inline void collect_methods(const RouteNode<S>& node, const std::string_view* segments,
-                                const std::size_t count, const std::size_t index,
-                                MethodSet& out) noexcept {
+    void collect_methods(const RouteNode<S>& node, const std::string_view* segments,
+                         const std::size_t count, const std::size_t index,
+                         MethodSet& out) noexcept {
         if (index == count) {
             for (const auto& method : node.handlers | std::views::keys) out.add(method);
             return;
@@ -183,67 +172,6 @@ namespace owl::detail {
         }
         if (node.param) {
             collect_methods(*node.param, segments, count, index + 1, out);
-        }
-    }
-
-    template <typename S>
-    [[nodiscard]] inline std::size_t depth(const RouteNode<S>& node) {
-        std::size_t deepest = 0;
-        for (const auto& child : node.literals) deepest = std::max(deepest, depth(*child));
-        if (node.param) deepest = std::max(deepest, depth(*node.param));
-        return deepest + 1;
-    }
-
-    [[nodiscard]] inline std::string join_route(const std::string_view prefix, const std::string_view inner) {
-        if (inner.empty() || inner == "/") return std::string(prefix);
-        if (prefix.empty() || prefix == "/") return std::string(inner);
-        return std::string(prefix) + std::string(inner);
-    }
-
-    template <typename S>
-    inline void prefix_patterns(RouteNode<S>& node, const std::string_view prefix) {
-        if (!node.pattern.empty()) node.pattern = join_route(prefix, node.pattern);
-        for (auto& child : node.literals) prefix_patterns(*child, prefix);
-        if (node.param) prefix_patterns(*node.param, prefix);
-    }
-
-    // Splices one sub-trie into another. Subtrees move wholesale where the
-    // target has nothing there yet, so this is mostly pointer moves rather
-    // than a re-insertion of every nested route.
-    template <typename S>
-    inline void merge(RouteNode<S>& into, RouteNode<S>&& from) {
-        for (auto& middleware : from.middleware) {
-            into.middleware.push_back(std::move(middleware));
-        }
-
-        if (!from.pattern.empty()) into.pattern = std::move(from.pattern);
-
-        for (auto& [method, handler] : from.handlers) {
-            if (into.handler_for(method)) {
-                throw std::invalid_argument("nested route collides with one already registered");
-            }
-            into.handlers.emplace_back(method, std::move(handler));
-        }
-
-        if (from.websocket) {
-            if (into.websocket) {
-                throw std::invalid_argument("nested websocket collides with one already registered");
-            }
-            into.websocket = std::move(from.websocket);
-        }
-
-        for (auto& child : from.literals) {
-            merge(into.literal_child(child->label), std::move(*child));
-        }
-
-        if (from.param) {
-            if (!into.param) {
-                into.param = std::move(from.param); // whole subtree, one pointer
-            } else if (into.param->param_name != from.param->param_name) {
-                throw std::invalid_argument("nested route names a parameter differently at the same position");
-            } else {
-                merge(*into.param, std::move(*from.param));
-            }
         }
     }
 }

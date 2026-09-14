@@ -61,16 +61,13 @@ namespace owl {
         // before the pools so it outlives them.
         const owl::loop_reactor reactor;
 
-        // The worker's cross-thread wakeup for loop_scheduler::post(): the
+        // The worker's door from other threads: loop_scheduler::post() and a
+        // WebSocket send or close from another worker both arrive here. The
         // dispatcher registers it on this context's h2o queue when it wires
-        // the worker up, below.
-        h2o_multithread_receiver_t hop{};
-
-        // The worker's receiver for WebSocket sends and closes posted from
-        // other threads. mutable because it is h2o's to write into from any
-        // thread; handlers see the Context as const, and run_handler hands
-        // this to the engine through that const view.
-        mutable h2o_multithread_receiver_t ws_hop{};
+        // the worker up, below. mutable because it is h2o's to write into
+        // from any thread; handlers see the Context as const, and run_handler
+        // hands it to the engine through that const view.
+        mutable h2o_multithread_receiver_t hop{};
 
 #ifdef OWL_ENABLE_POSTGRESQL
         // Null until on_context_init wires it, and null for good when the

@@ -25,8 +25,17 @@
 
 namespace owl {
     namespace detail {
-        struct LoopHopMsg {
+        // A unit of work carried to this worker from any thread over its
+        // hop. run() owns the node: it deletes it, and does so before
+        // resuming anything, or a nested post() could see a stale node.
+        // Standard-layout, so the receiver can walk back from the list node.
+        struct LoopJob {
             h2o_multithread_message_t super{};
+            void (*run)(LoopJob*) = nullptr;
+        };
+
+        // post()'s job: resume a continuation here.
+        struct LoopHopMsg final : LoopJob {
             std::coroutine_handle<> waiting{};
         };
 
@@ -36,15 +45,18 @@ namespace owl {
             std::coroutine_handle<> waiting{};
         };
 
-        // delete-then-resume: the message must be gone before the
-        // continuation runs, or a nested post() could see a stale node.
+        inline void resume_hopped(LoopJob* const job) {
+            auto* const msg = static_cast<LoopHopMsg*>(job);
+            const auto waiting = msg->waiting;
+            delete msg;
+            if (waiting) waiting.resume();
+        }
+
         inline void on_loop_hop(h2o_multithread_receiver_t*, h2o_linklist_t* const messages) {
             while (!h2o_linklist_is_empty(messages)) {
-                auto* const msg = reinterpret_cast<LoopHopMsg*>(messages->next);
-                h2o_linklist_unlink(&msg->super.link);
-                const auto waiting = msg->waiting;
-                delete msg;
-                if (waiting) waiting.resume();
+                auto* const job = H2O_STRUCT_FROM_MEMBER(LoopJob, super.link, messages->next);
+                h2o_linklist_unlink(&job->super.link);
+                job->run(job);
             }
         }
 
@@ -80,7 +92,7 @@ namespace owl {
         // is no awaiter to unlink -- which is why schedule_after is separate.
         void post(const std::coroutine_handle<> continuation) const {
             if (hop_ != nullptr) {
-                auto* const msg = new detail::LoopHopMsg{.super = {}, .waiting = continuation};
+                auto* const msg = new detail::LoopHopMsg{{.super = {}, .run = &detail::resume_hopped}, continuation};
                 h2o_multithread_send_message(hop_, &msg->super);
                 return;
             }

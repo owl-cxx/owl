@@ -101,8 +101,15 @@ namespace owl::detail {
     }
 
     inline void add_token_header(h2o_req_t* const req, const h2o_token_t* const token, const std::string_view value) {
-        const auto copy = value.empty() ? h2o_iovec_init("", 0) : h2o_strdup(&req->pool, value.data(), value.size());
+        const auto copy = dup(&req->pool, value);
         h2o_add_header(&req->pool, &req->res.headers, token, nullptr, copy.base, copy.len);
+    }
+
+    // For a header h2o has no token for. The value is copied into the pool;
+    // the name is not, so it must outlive the request -- a literal does.
+    inline void add_header(h2o_req_t* const req, const std::string_view name, const std::string_view value) {
+        const auto copy = dup(&req->pool, value);
+        h2o_add_header_by_str(&req->pool, &req->res.headers, name.data(), name.size(), 0, nullptr, copy.base, copy.len);
     }
 
     inline coro::task<void> write_stream(h2o_req_t* const req, coro::async_generator<std::string> gen) {
@@ -127,8 +134,8 @@ namespace owl::detail {
         }
     }
 
-    inline void send_error_floor(h2o_req_t* req, const int status) noexcept {
-        h2o_send_error_generic(req, status, policy::reason_phrase(status), policy::reason_phrase(status), 0);
+    inline void send_error_floor(h2o_req_t* req, const int status, const int flags = 0) noexcept {
+        h2o_send_error_generic(req, status, policy::reason_phrase(status), policy::reason_phrase(status), flags);
     }
 
     inline void send_inline(h2o_req_t* const req, const int status, const char* const body, const std::size_t len) {
@@ -141,8 +148,7 @@ namespace owl::detail {
     }
 
     inline void send_not_allowed(h2o_req_t* const req, const std::string_view allow) {
-        const auto [base, len] = h2o_strdup(&req->pool, allow.data(), allow.size());
-        h2o_add_header_by_str(&req->pool, &req->res.headers, H2O_STRLIT("allow"), 0, nullptr, base, len);
+        add_header(req, "allow", allow);
         send_inline(req, 405, H2O_STRLIT("method not allowed"));
     }
 }
