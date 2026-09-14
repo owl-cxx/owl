@@ -300,7 +300,7 @@ Each box below is one turn of that worker's `h2o_evloop_run`:
 | Directory  | Holds                                                                                       |
 |------------|---------------------------------------------------------------------------------------------|
 | `core/`    | vocabulary types: `Method`, `Config`, `State`, `Context`, `KickToken` |
-| `util/`    | `pool_map`, string helpers, base64                                                          |
+| `util/`    | `view_map`, string helpers, base64                                                          |
 | `http/`    | `Request`, `Response`, cookies, reason phrases; `detail/` for send/finish                   |
 | `extract/` | parsing, extractor types, and the `FromContext` dispatch                                    |
 | `routing/` | the route trie, `Router`, middleware                                                        |

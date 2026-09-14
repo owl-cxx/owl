@@ -8,7 +8,7 @@
 
 #include <h2o.h>
 
-#include "pool_map.h"
+#include "view_map.h"
 
 namespace owl::util {
     // ASCII case-insensitive character equality
@@ -38,7 +38,7 @@ namespace owl::util {
         return next == ';' || next == ' ' || next == '\t';
     }
 
-    inline auto parse_query_req(h2o_req_t* const req) -> pool_map {
+    inline auto parse_query_req(h2o_req_t* const req) -> view_map {
         if (req->path.base != nullptr && req->query_at != SIZE_MAX && req->query_at < req->path.len) {
             return std::string_view(req->path.base, req->path.len).substr(req->query_at + 1)
                 | std::views::split('&')
@@ -54,9 +54,9 @@ namespace owl::util {
                                ? std::pair<std::string_view, std::string_view>{view, {}}
                                : std::pair{view.substr(0, eq_pos), view.substr(eq_pos + 1)};
                 })
-                | std::ranges::to<pool_map>();
+                | std::ranges::to<view_map>();
         }
 
-        return pool_map{};
+        return view_map{};
     }
 }

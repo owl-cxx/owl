@@ -15,7 +15,7 @@
 #include <h2o.h>
 
 #include "owl/core/method.h"
-#include "owl/util/pool_map.h"
+#include "owl/util/view_map.h"
 #include "owl/util/util.h"
 
 namespace owl {
@@ -122,7 +122,7 @@ namespace owl {
         Request(
             h2o_req_t* const req,
             const Method method,
-            pool_map queries
+            view_map queries
         ) : req_(req),
             method_(method),
             queries_(std::move(queries)) {
@@ -134,7 +134,7 @@ namespace owl {
 
         h2o_req_t* const req_;
         const Method method_;
-        const pool_map queries_;
+        const view_map queries_;
         std::stop_source stop_source_{};
         std::array<PathParam, max_path_params> params_{};
         std::size_t param_count_{0};

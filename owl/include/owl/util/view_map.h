@@ -1,5 +1,10 @@
 #pragma once
 
+// A map of views: keys and values are string_views into memory that
+// outlives the map -- a request's pool, for the query string -- so it
+// owns nothing and copies nothing. The name says what it holds, like
+// PathView and HeaderView, rather than who owns the bytes.
+
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
@@ -30,7 +35,7 @@ namespace owl {
         }
     };
 
-    class pool_map final : public std::unordered_map<std::string_view, std::string_view> {
+    class view_map final : public std::unordered_map<std::string_view, std::string_view> {
         using base = std::unordered_map<std::string_view, std::string_view>;
 
     public:
@@ -39,14 +44,14 @@ namespace owl {
         using base::end;
         using base::find;
 
-        pool_map() = default;
+        view_map() = default;
 
         // The from_range constructor ranges::to looks for. Filled by hand
         // rather than forwarded to the base: libstdc++ 14 has no from_range
         // constructor on unordered_map yet, and one insert per pair is what
         // it would do anyway.
         template <std::ranges::input_range R> requires std::convertible_to<std::ranges::range_reference_t<R>, value_type>
-        pool_map(std::from_range_t, R&& r) {
+        view_map(std::from_range_t, R&& r) {
             for (auto&& kv : r) base::insert(static_cast<value_type>(std::forward<decltype(kv)>(kv)));
         }
 

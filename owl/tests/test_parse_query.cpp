@@ -5,7 +5,7 @@
 #include <owl/util/util.h>
 
 namespace {
-    owl::pool_map parse(h2o_req_t& req, char* const path, const std::size_t path_len, const std::size_t query_at) {
+    owl::view_map parse(h2o_req_t& req, char* const path, const std::size_t path_len, const std::size_t query_at) {
         req.path = {.base = path, .len = path_len};
         req.query_at = query_at;
         return owl::util::parse_query_req(&req);

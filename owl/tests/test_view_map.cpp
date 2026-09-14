@@ -4,10 +4,10 @@
 #include <utility>
 #include <vector>
 
-#include <owl/util/pool_map.h>
+#include <owl/util/view_map.h>
 
-TEST(PoolMap, ComputeIfAbsentInsertsOnce) {
-    owl::pool_map map;
+TEST(ViewMap, ComputeIfAbsentInsertsOnce) {
+    owl::view_map map;
 
     int n = 0;
     std::string_view& a = map.compute_if_absent("k", [&] {
@@ -27,29 +27,29 @@ TEST(PoolMap, ComputeIfAbsentInsertsOnce) {
     EXPECT_FALSE(map.contains("missing"));
 }
 
-TEST(PoolMap, DistinctKeys) {
-    owl::pool_map map;
+TEST(ViewMap, DistinctKeys) {
+    owl::view_map map;
 
     EXPECT_EQ(map.compute_if_absent("a", [] { return std::string_view{"1"}; }), "1");
     EXPECT_EQ(map.compute_if_absent("b", [] { return std::string_view{"2"}; }), "2");
     EXPECT_EQ(map.compute_if_absent("a", [] { return std::string_view{"nope"}; }), "1");
 }
 
-TEST(PoolMap, RangesToCollectsPairsFirstWins) {
+TEST(ViewMap, RangesToCollectsPairsFirstWins) {
     const std::vector<std::pair<std::string_view, std::string_view>> pairs{
         {"a", "1"},
         {"b", "two"},
         {"a", "3"},
     };
 
-    const auto map = pairs | std::ranges::to<owl::pool_map>();
+    const auto map = pairs | std::ranges::to<owl::view_map>();
     EXPECT_EQ(*map.find_value("a"), "1");
     EXPECT_EQ(*map.find_value("b"), "two");
     EXPECT_EQ(map.find_value("missing"), nullptr);
 }
 
-TEST(PoolMap, KeysAreCaseSensitive) {
-    owl::pool_map map;
+TEST(ViewMap, KeysAreCaseSensitive) {
+    owl::view_map map;
     map.compute_if_absent("Key", [] { return std::string_view{"upper"}; });
     map.compute_if_absent("key", [] { return std::string_view{"lower"}; });
 

@@ -25,7 +25,7 @@
 #include "owl/routing/router.h"
 #include "owl/server.h"
 #include "owl/util/base64.h"
-#include "owl/util/pool_map.h"
+#include "owl/util/view_map.h"
 #include "owl/util/util.h"
 #include "owl/ws/controller.h"
 #include "owl/ws/message.h"

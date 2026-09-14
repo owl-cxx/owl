@@ -42,7 +42,7 @@ target_sources(owl INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/middleware.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/routing/router.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/util/base64.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/util/pool_map.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/util/view_map.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/util/util.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/ws/message.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/owl/ws/socket.h"
@@ -141,7 +141,7 @@ if (BUILD_TESTING)
     owl_add_test(test_method)
     owl_add_test(test_request)
     owl_add_test(test_parse_query)
-    owl_add_test(test_pool_map)
+    owl_add_test(test_view_map)
     owl_add_test(test_response)
     owl_add_test(test_cookie)
     owl_add_test(test_router)
