@@ -49,12 +49,17 @@ yourself (see [HTTP RED](#http-red)). `<owl/owl.h>` never pulls metrics.
 owl::prometheus::counter("jobs_total").inc();
 owl::prometheus::counter("jobs_total", {"status"}).labels({"ok"}).inc();
 owl::prometheus::gauge("queue_depth").set(3);
+owl::prometheus::gauge("queue_depth", {"queue"}).labels({"mail"}).set(3);
 owl::prometheus::histogram("work_seconds").observe(dt);
+owl::prometheus::histogram("db_seconds", {0.001, 0.01, 0.1}).observe(dt);
+owl::prometheus::describe("jobs_total", "Jobs started, by outcome.");
 ```
 
-Counter, Gauge, Histogram. No Summary. Histogram buckets are the Prometheus
-HTTP defaults (`0.005` … `10` + `Inf`). Negative histogram samples are
-ignored; a counter must not decrease.
+Counter, Gauge, Histogram. No Summary. Histogram buckets default to the
+Prometheus HTTP set (`0.005` … `10` + `Inf`); a family may pin its own
+strictly-ascending finite bounds and later calls must match. `describe()`
+sets HELP; without it HELP is the metric name. Negative histogram samples
+are ignored; a counter must not decrease.
 
 Values are atomics. The series map is an atomic copy-on-write snapshot, so
 inc/scrape do not take a mutex. A mutex runs only when inserting a **new**

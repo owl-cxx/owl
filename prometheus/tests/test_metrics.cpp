@@ -1,18 +1,125 @@
+#include <initializer_list>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include <prometheus/prometheus.h>
+
+namespace {
+    constexpr auto npos = std::string::npos;
+}
 
 struct PrometheusClear : testing::Test {
     PrometheusClear() {
         owl::prometheus::clear();
     }
 };
+
+TEST_F(PrometheusClear, HistogramBucketsAreCumulativeInDump) {
+    const auto work = owl::prometheus::histogram("work_seconds");
+    work.observe(0.001);
+    work.observe(0.3);
+    const std::string body = owl::prometheus::dump();
+    EXPECT_NE(body.find("work_seconds_bucket{le=\"0.005\"} 1"), npos);
+    EXPECT_NE(body.find("work_seconds_bucket{le=\"0.25\"} 1"), npos);
+    EXPECT_NE(body.find("work_seconds_bucket{le=\"0.5\"} 2"), npos);
+    EXPECT_NE(body.find("work_seconds_bucket{le=\"+Inf\"} 2"), npos);
+    EXPECT_NE(body.find("work_seconds_count 2"), npos);
+}
+
+TEST_F(PrometheusClear, HistogramTakesItsOwnBuckets) {
+    const auto db = owl::prometheus::histogram("db_seconds", {0.001, 0.01, 0.1});
+    db.observe(0.05);
+    db.observe(5);
+    const std::string body = owl::prometheus::dump();
+    EXPECT_NE(body.find("db_seconds_bucket{le=\"0.001\"} 0"), npos);
+    EXPECT_NE(body.find("db_seconds_bucket{le=\"0.01\"} 0"), npos);
+    EXPECT_NE(body.find("db_seconds_bucket{le=\"0.1\"} 1"), npos);
+    EXPECT_NE(body.find("db_seconds_bucket{le=\"+Inf\"} 2"), npos);
+    EXPECT_EQ(body.find("db_seconds_bucket{le=\"0.005\"}"), npos);
+}
+
+TEST_F(PrometheusClear, LabeledHistogramTakesItsOwnBuckets) {
+    owl::prometheus::histogram("db_seconds", {"op"}, {0.001, 0.01}).labels({"select"}).observe(0.005);
+    const std::string body = owl::prometheus::dump();
+    EXPECT_NE(body.find("db_seconds_bucket{op=\"select\",le=\"0.01\"} 1"), npos);
+    EXPECT_NE(body.find("db_seconds_bucket{op=\"select\",le=\"+Inf\"} 1"), npos);
+}
+
+TEST_F(PrometheusClear, RejectsBucketsThatAreNotAscendingAndFinite) {
+    EXPECT_THROW((void)owl::prometheus::histogram("h", {0.1, 0.05}), std::invalid_argument);
+    EXPECT_THROW((void)owl::prometheus::histogram("h", {0.1, 0.1}), std::invalid_argument);
+    EXPECT_THROW((void)owl::prometheus::histogram("h", std::initializer_list<double>{}), std::invalid_argument);
+    EXPECT_THROW((void)owl::prometheus::histogram("h", {0.1, std::numeric_limits<double>::infinity()}), std::invalid_argument);
+}
+
+TEST_F(PrometheusClear, RejectsBucketsThatDifferFromTheFamilys) {
+    (void)owl::prometheus::histogram("h", {0.1, 1});
+    EXPECT_THROW((void)owl::prometheus::histogram("h", {0.5, 1}), std::invalid_argument);
+    EXPECT_THROW((void)owl::prometheus::histogram("h"), std::invalid_argument);
+}
+
+TEST_F(PrometheusClear, LabeledGaugeAppearsInDump) {
+    owl::prometheus::gauge("queue_depth", {"queue"}).labels({"mail"}).set(3);
+    owl::prometheus::gauge("queue_depth", {"queue"}).labels({"mail"}).inc(2);
+    const std::string body = owl::prometheus::dump();
+    EXPECT_NE(body.find("queue_depth{queue=\"mail\"} 5"), npos);
+}
+
+TEST_F(PrometheusClear, GaugeRequiresItsLabels) {
+    EXPECT_THROW(owl::prometheus::gauge("queue_depth", {"queue"}).set(1), std::invalid_argument);
+}
+
+TEST_F(PrometheusClear, DescribeSetsHelpText) {
+    owl::prometheus::describe("jobs_total", "Jobs started, by outcome.");
+    owl::prometheus::counter("jobs_total").inc();
+    EXPECT_NE(owl::prometheus::dump().find("# HELP jobs_total Jobs started, by outcome.\n"), npos);
+}
+
+TEST_F(PrometheusClear, HelpDefaultsToTheName) {
+    owl::prometheus::counter("jobs_total").inc();
+    EXPECT_NE(owl::prometheus::dump().find("# HELP jobs_total jobs_total\n"), npos);
+}
+
+TEST_F(PrometheusClear, HelpIsEscaped) {
+    owl::prometheus::describe("jobs_total", "back\\slash\nnext line");
+    owl::prometheus::counter("jobs_total").inc();
+    EXPECT_NE(owl::prometheus::dump().find("# HELP jobs_total back\\\\slash\\nnext line\n"), npos);
+}
+
+TEST_F(PrometheusClear, RecordRequestStartsOverAfterClear) {
+    owl::prometheus::record_request("GET", "/ping", 200, 0.5);
+    owl::prometheus::clear();
+    owl::prometheus::record_request("GET", "/ping", 200, 0.5);
+    EXPECT_NE(owl::prometheus::dump().find("http_requests_total{method=\"GET\",status=\"200\",route=\"/ping\"} 1"), npos);
+}
+
+TEST_F(PrometheusClear, RecordRequestAfterUnmatchedGainsADuration) {
+    owl::prometheus::record_unmatched("GET", "/x", 404);
+    owl::prometheus::record_request("GET", "/x", 404, 0.1);
+    const std::string body = owl::prometheus::dump();
+    EXPECT_NE(body.find("http_requests_total{method=\"GET\",status=\"404\",route=\"/x\"} 2"), npos);
+    EXPECT_NE(body.find("http_request_duration_seconds_count{method=\"GET\",status=\"404\",route=\"/x\"} 1"), npos);
+}
+
+TEST_F(PrometheusClear, RecordRequestFromManyThreadsCountsEveryone) {
+    std::vector<std::thread> pool;
+    for (int t = 0; t < 4; ++t) {
+        pool.emplace_back([] {
+            for (int i = 0; i < 1000; ++i) owl::prometheus::record_request("GET", "/ping", 200, 0.001);
+        });
+    }
+    for (auto& worker : pool) worker.join();
+    const std::string body = owl::prometheus::dump();
+    EXPECT_NE(body.find("http_requests_total{method=\"GET\",status=\"200\",route=\"/ping\"} 4000"), npos);
+    EXPECT_NE(body.find("http_request_duration_seconds_count{method=\"GET\",status=\"200\",route=\"/ping\"} 4000"), npos);
+}
 
 TEST_F(PrometheusClear, ConcurrentIncDuringDump) {
     const auto jobs = owl::prometheus::counter("jobs_total");

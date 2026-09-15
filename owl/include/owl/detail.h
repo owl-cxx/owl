@@ -215,7 +215,9 @@ namespace owl::detail {
             if (handler == nullptr) {
                 const auto allowed = dispatcher->router->allowed_methods(request->path());
                 const auto status = allowed.empty() ? 404 : 405;
-                Exchange::unmatched(to_string(request->method()), request->route_pattern(), status);
+                // A miss never bound a route pattern; using route_pattern()
+                // would scrape as route="". Same sentinel as the catch path.
+                Exchange::unmatched(to_string(request->method()), "unmatched", status);
                 allowed.empty() ? send_not_found(req) : send_not_allowed(req, allowed.to_allow_header());
                 return 0;
             }

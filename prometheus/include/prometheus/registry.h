@@ -11,6 +11,7 @@
 #include <iterator>
 #include <memory>
 #include <mutex>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -77,9 +78,44 @@ namespace owl::prometheus {
             0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10
         };
 
+        [[nodiscard]] inline bool same_bounds(
+            const std::vector<double>& have,
+            const std::span<const double> want
+        ) noexcept {
+            if (have.size() != want.size()) return false;
+            for (std::size_t i = 0; i < have.size(); ++i) {
+                if (have[i] != want[i]) return false;
+            }
+            return true;
+        }
+
+        // Prometheus le= is a lie if a family mixes bounds. Empty / Inf / NaN
+        // cannot be a finite strictly-increasing upper bound.
+        inline void require_histogram_buckets(const std::span<const double> buckets) {
+            if (buckets.empty()) {
+                throw std::invalid_argument("histogram buckets must not be empty");
+            }
+            for (std::size_t i = 0; i < buckets.size(); ++i) {
+                if (!std::isfinite(buckets[i])) {
+                    throw std::invalid_argument("histogram buckets must be finite");
+                }
+                if (i > 0 && buckets[i] <= buckets[i - 1]) {
+                    throw std::invalid_argument("histogram buckets must be strictly ascending");
+                }
+            }
+        }
+
+        [[nodiscard]] inline std::span<const double> effective_histogram_buckets(
+            const std::span<const double> buckets
+        ) noexcept {
+            if (buckets.empty()) return default_buckets;
+            return buckets;
+        }
+
         struct Series final {
             std::vector<std::string> label_values;
             std::atomic<double> value{0};
+            std::vector<double> bucket_bounds;
             std::vector<std::uint64_t> buckets;
             std::atomic<double> sum{0};
             std::atomic<std::uint64_t> count{0};
@@ -113,6 +149,9 @@ namespace owl::prometheus {
 
         struct Snapshot final {
             std::unordered_map<std::string, Family, TransparentStringHash, std::equal_to<>> families;
+            // describe() can run before the first series; dump() reads this
+            // when the family later appears. Default HELP is the metric name.
+            std::unordered_map<std::string, std::string, TransparentStringHash, std::equal_to<>> help;
         };
 
         inline void append_labels(
@@ -224,16 +263,32 @@ namespace owl::prometheus {
                 }
             }
 
+            static void check_histogram_buckets(
+                const Family& fam,
+                const std::string_view name,
+                const Kind kind,
+                const std::span<const double> buckets
+            ) {
+                if (kind != Kind::Histogram) return;
+                if (!same_bounds(fam.bucket_bounds, effective_histogram_buckets(buckets))) {
+                    throw std::invalid_argument(std::string(name).append(" bucket mismatch"));
+                }
+            }
+
             static std::shared_ptr<Series> find(
                 const Snapshot& snap,
                 const std::string_view name,
                 const std::span<const std::string_view> label_names,
                 const Kind kind,
-                const std::string& key
+                const std::string& key,
+                const std::span<const double> buckets
             ) {
                 const auto it = snap.families.find(name);
                 if (it == snap.families.end()) return nullptr;
                 check_family(it->second, name, label_names, kind);
+                // Existing unlabeled series would otherwise be reused when a
+                // later histogram() passes different bounds.
+                check_histogram_buckets(it->second, name, kind, buckets);
                 const auto series = it->second.series.find(key);
                 if (series == it->second.series.end()) return nullptr;
                 return series->second;
@@ -243,19 +298,20 @@ namespace owl::prometheus {
                 const std::string_view name,
                 const std::span<const std::string_view> label_names,
                 const std::span<const std::string_view> values,
-                const Kind kind
+                const Kind kind,
+                const std::span<const double> buckets = {}
             ) {
                 check_names(name, label_names);
                 if (values.size() != label_names.size()) {
                     throw std::invalid_argument("label value count mismatch");
                 }
                 const auto key = series_key(values);
-                if (const auto existing = find(*load(), name, label_names, kind, key)) {
+                if (const auto existing = find(*load(), name, label_names, kind, key, buckets)) {
                     return existing;
                 }
                 const std::unique_lock exclusive{insert_mu};
                 auto snap = load();
-                if (const auto existing = find(*snap, name, label_names, kind, key)) return existing;
+                if (const auto existing = find(*snap, name, label_names, kind, key, buckets)) return existing;
                 auto next = std::make_shared<Snapshot>(*snap);
                 const auto [it, inserted] = next->families.try_emplace(std::string(name));
                 auto& fam = it->second;
@@ -263,14 +319,17 @@ namespace owl::prometheus {
                     fam.kind = kind;
                     fam.label_names.assign(label_names.begin(), label_names.end());
                     if (kind == Kind::Histogram) {
-                        fam.bucket_bounds.assign(default_buckets.begin(), default_buckets.end());
+                        const auto bounds = effective_histogram_buckets(buckets);
+                        fam.bucket_bounds.assign(bounds.begin(), bounds.end());
                     }
                 } else {
                     check_family(fam, name, label_names, kind);
+                    check_histogram_buckets(fam, name, kind, buckets);
                 }
                 auto series = std::make_shared<Series>();
                 series->label_values.assign(values.begin(), values.end());
                 if (kind == Kind::Histogram) {
+                    series->bucket_bounds = fam.bucket_bounds;
                     series->buckets.assign(fam.bucket_bounds.size() + 1, 0);
                 }
                 fam.series.emplace(key, series);
@@ -282,15 +341,35 @@ namespace owl::prometheus {
                 return std::atomic_load_explicit(&snapshot_, std::memory_order_acquire);
             }
 
+            void describe(const std::string_view name, const std::string_view help) {
+                if (!valid_metric_name(name)) {
+                    throw std::invalid_argument(std::string("invalid metric name: ").append(name));
+                }
+                const std::unique_lock exclusive{insert_mu};
+                auto snap = load();
+                auto next = std::make_shared<Snapshot>(*snap);
+                next->help.insert_or_assign(std::string(name), std::string(help));
+                std::atomic_store_explicit(&snapshot_, std::move(next), std::memory_order_release);
+            }
+
             [[nodiscard]] std::string dump() const {
                 const auto snap = load();
                 std::string out;
                 for (const auto& [name, fam] : snap->families) {
-                    std::format_to(
-                        std::back_inserter(out),
-                        "# HELP {} {}\n# TYPE {} {}\n",
-                        name, name, name, type_name(fam.kind));
-                    for (const auto& [_, series] : fam.series) {
+                    out.append("# HELP ");
+                    out.append(name);
+                    out.push_back(' ');
+                    if (const auto help = snap->help.find(name); help != snap->help.end()) {
+                        append_escaped(out, help->second);
+                    } else {
+                        append_escaped(out, name);
+                    }
+                    out.append("\n# TYPE ");
+                    out.append(name);
+                    out.push_back(' ');
+                    out.append(type_name(fam.kind));
+                    out.push_back('\n');
+                    for (const auto& series : fam.series | std::views::values) {
                         if (fam.kind == Kind::Histogram) {
                             dump_histogram(out, name, fam, *series);
                             continue;
@@ -331,10 +410,9 @@ namespace owl::prometheus {
             std::string name,
             std::vector<std::string> label_names,
             std::shared_ptr<detail::Series> series
-        )
-            : name_(std::move(name)),
-              label_names_(std::move(label_names)),
-              series_(std::move(series)) {
+        ) : name_(std::move(name)),
+            label_names_(std::move(label_names)),
+            series_(std::move(series)) {
         }
 
         [[nodiscard]] Counter labels(const std::initializer_list<std::string_view> values) const {
@@ -382,27 +460,62 @@ namespace owl::prometheus {
 
     class Gauge final {
     public:
-        explicit Gauge(std::shared_ptr<detail::Series> series) noexcept : series_(std::move(series)) {
+        Gauge(
+            std::string name,
+            std::vector<std::string> label_names,
+            std::shared_ptr<detail::Series> series
+        ) : name_(std::move(name)),
+            label_names_(std::move(label_names)),
+            series_(std::move(series)) {
         }
 
-        void set(const double n) const noexcept {
+        [[nodiscard]] Gauge labels(const std::initializer_list<std::string_view> values) const {
+            const auto names = detail::views_of(label_names_);
+            const std::vector<std::string_view> view{values};
+            return Gauge{
+                name_,
+                label_names_,
+                detail::registry().get_or_insert(name_, names, view, detail::Kind::Gauge)
+            };
+        }
+
+        void set(const double n) const {
+            if (!series_) throw std::invalid_argument("gauge requires labels()");
             series_->value.store(n, std::memory_order_relaxed);
         }
 
-        void inc(const double n = 1) const noexcept {
+        void inc(const double n = 1) const {
+            if (!series_) throw std::invalid_argument("gauge requires labels()");
             series_->value.fetch_add(n, std::memory_order_relaxed);
         }
 
-        void dec(const double n = 1) const noexcept {
+        void dec(const double n = 1) const {
+            if (!series_) throw std::invalid_argument("gauge requires labels()");
             series_->value.fetch_add(-n, std::memory_order_relaxed);
         }
 
     private:
+        std::string name_;
+        std::vector<std::string> label_names_;
         std::shared_ptr<detail::Series> series_;
     };
 
     [[nodiscard]] inline Gauge gauge(const std::string_view name) {
-        return Gauge{detail::registry().get_or_insert(name, {}, {}, detail::Kind::Gauge)};
+        return Gauge{
+            std::string{name},
+            {},
+            detail::registry().get_or_insert(name, {}, {}, detail::Kind::Gauge)
+        };
+    }
+
+    [[nodiscard]] inline Gauge gauge(
+        const std::string_view name,
+        const std::initializer_list<std::string_view> label_names
+    ) {
+        std::vector<std::string> names;
+        names.reserve(label_names.size());
+        for (const auto label : label_names) names.emplace_back(label);
+        return Gauge{std::string{name}, std::move(names), nullptr};
     }
 
     class Histogram final {
@@ -410,11 +523,12 @@ namespace owl::prometheus {
         Histogram(
             std::string name,
             std::vector<std::string> label_names,
-            std::shared_ptr<detail::Series> series
-        )
-            : name_(std::move(name)),
-              label_names_(std::move(label_names)),
-              series_(std::move(series)) {
+            std::shared_ptr<detail::Series> series,
+            std::vector<double> bucket_bounds = {}
+        ) : name_(std::move(name)),
+            label_names_(std::move(label_names)),
+            series_(std::move(series)),
+            bucket_bounds_(std::move(bucket_bounds)) {
         }
 
         [[nodiscard]] Histogram labels(const std::initializer_list<std::string_view> values) const {
@@ -423,7 +537,8 @@ namespace owl::prometheus {
             return Histogram{
                 name_,
                 label_names_,
-                detail::registry().get_or_insert(name_, names, view, detail::Kind::Histogram)
+                detail::registry().get_or_insert(name_, names, view, detail::Kind::Histogram, bucket_bounds_),
+                bucket_bounds_
             };
         }
 
@@ -432,8 +547,10 @@ namespace owl::prometheus {
             if (n < 0 || !std::isfinite(n)) return;
             series_->count.fetch_add(1, std::memory_order_relaxed);
             series_->sum.fetch_add(n, std::memory_order_relaxed);
-            for (std::size_t i = 0; i < detail::default_buckets.size(); ++i) {
-                if (n <= detail::default_buckets[i]) {
+            // Series copies the family's bounds: observe must not assume the
+            // HTTP defaults, and Family lives in a snapshot that can be replaced.
+            for (std::size_t i = 0; i < series_->bucket_bounds.size(); ++i) {
+                if (n <= series_->bucket_bounds[i]) {
                     std::atomic_ref<std::uint64_t>(series_->buckets[i]).fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -444,6 +561,7 @@ namespace owl::prometheus {
         std::string name_;
         std::vector<std::string> label_names_;
         std::shared_ptr<detail::Series> series_;
+        std::vector<double> bucket_bounds_;
     };
 
     [[nodiscard]] inline Histogram histogram(const std::string_view name) {
@@ -462,6 +580,44 @@ namespace owl::prometheus {
         names.reserve(label_names.size());
         for (const auto label : label_names) names.emplace_back(label);
         return Histogram{std::string{name}, std::move(names), nullptr};
+    }
+
+    [[nodiscard]] inline Histogram histogram(
+        const std::string_view name,
+        const std::initializer_list<double> buckets
+    ) {
+        const std::span<const double> bounds{buckets};
+        detail::require_histogram_buckets(bounds);
+        return Histogram{
+            std::string{name},
+            {},
+            detail::registry().get_or_insert(name, {}, {}, detail::Kind::Histogram, bounds),
+            std::vector<double>{bounds.begin(), bounds.end()}
+        };
+    }
+
+    [[nodiscard]] inline Histogram histogram(
+        const std::string_view name,
+        const std::initializer_list<std::string_view> label_names,
+        const std::initializer_list<double> buckets
+    ) {
+        const std::span<const double> bounds{buckets};
+        detail::require_histogram_buckets(bounds);
+        std::vector<std::string> names;
+        names.reserve(label_names.size());
+        for (const auto label : label_names) names.emplace_back(label);
+        return Histogram{
+            std::string{name},
+            std::move(names),
+            nullptr,
+            std::vector<double>{bounds.begin(), bounds.end()}
+        };
+    }
+
+    // HELP defaults to the metric name so a scrape is valid without ceremony.
+    // A separate call so help can be set before the first series exists.
+    inline void describe(const std::string_view name, const std::string_view help) {
+        detail::registry().describe(name, help);
     }
 
     inline void clear() {
