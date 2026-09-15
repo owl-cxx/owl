@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) return 1;
+    if (inet_pton(AF_INET, "0.0.0.0", &addr.sin_addr) != 1) return 1;
 
     const int fd = socket(AF_INET, SOCK_STREAM, 0);
     const int on = 1;
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
     h2o_socket_t *listener = h2o_evloop_socket_create(ctx.loop, fd, H2O_SOCKET_FLAG_DONT_READ);
     h2o_socket_read_start(listener, on_accept);
 
-    printf("raw-h2o listening on http://127.0.0.1:%u (/plaintext, /json)\n", port);
+    printf("raw-h2o listening on http://0.0.0.0:%u (/plaintext, /json)\n", port);
     fflush(stdout);
     for (;;) h2o_evloop_run(ctx.loop, INT32_MAX);
 }

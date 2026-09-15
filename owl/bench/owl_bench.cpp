@@ -27,9 +27,9 @@ int main(int argc, char** argv) {
             .route<"/json">(owl::get(json));
         owl::Server<BenchState> server = owl::Server<BenchState>::builder()
             .router(std::move(router))
-            .config({.address = "127.0.0.1", .port = port, .threads = threads})
+            .config({.address = "0.0.0.0", .port = port, .threads = threads})
             .build_with(std::make_shared<BenchState>());
-        std::printf("owl listening on http://127.0.0.1:%u (/plaintext, /json)\n", server.port());
+        std::printf("owl listening on http://0.0.0.0:%u (/plaintext, /json)\n", server.port());
         std::fflush(stdout);
         server.start();
         return 0;
