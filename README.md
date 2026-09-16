@@ -7,6 +7,9 @@
 Routes and extractors are checked at compile time.<br>
 Coroutine handlers stay on the event loop.
 
+[![CI](https://github.com/MrAdkhambek/owl/actions/workflows/ci.yml/badge.svg)](https://github.com/MrAdkhambek/owl/actions/workflows/ci.yml)
+[![Linux](https://img.shields.io/badge/Linux-GCC%2014-FCC624?logo=linux&logoColor=black)](CONTRIBUTING.md#build)
+[![macOS](https://img.shields.io/badge/macOS-Apple%20clang-000000?logo=apple&logoColor=white)](CONTRIBUTING.md#build)
 [![C++](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-4.3-064F8C?logo=cmake&logoColor=white)](#install)
 [![header-only](https://img.shields.io/badge/header--only-yes-success)](#)
@@ -92,7 +95,7 @@ A small REST API -- register, login, posts on postgres, sessions on redis -- liv
 
 ## Stability
 
-Experimental. APIs move between commits, there are no tagged releases, and none
+Early. APIs move between commits, there are no tagged releases, and none
 of this has run in production. Do not ship this. If you depend on it anyway,
 pin a commit.
 

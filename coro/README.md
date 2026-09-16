@@ -16,7 +16,7 @@ Nothing runs until you await it.
 </div>
 
 > [!WARNING]
-> Part of [owl](../README.md). Experimental. Not production-ready.
+> Part of [owl](../README.md). Early. Not production-ready.
 
 ```cpp
 #include <coro/coro.h>

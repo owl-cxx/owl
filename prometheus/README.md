@@ -16,7 +16,7 @@ text-exposition dumps. Standalone — it depends on no web framework.
 </div>
 
 > [!WARNING]
-> Part of [owl](../README.md). Experimental. Not production-ready.
+> Part of [owl](../README.md). Early. Not production-ready.
 
 ```cpp
 #include <prometheus/prometheus.h>

@@ -16,7 +16,7 @@ pool, one `query<"...">`, never a blocked event loop.
 </div>
 
 > [!WARNING]
-> Part of [owl](../README.md). Experimental. Not production-ready.
+> Part of [owl](../README.md). Early. Not production-ready.
 
 ```cpp
 coro::task<owl::Response> get_user(const sql::pool<sql::psql>& pg, owl::Path<"id", std::int64_t> id) {

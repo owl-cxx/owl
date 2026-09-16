@@ -15,7 +15,7 @@
 </div>
 
 > [!WARNING]
-> Part of [owl](../README.md). Experimental. Not production-ready.
+> Part of [owl](../README.md). Early. Not production-ready.
 
 ```cpp
 #include <fstr/fstr.h>

@@ -16,7 +16,7 @@ async generator, never a blocked event loop.
 </div>
 
 > [!WARNING]
-> Part of [owl](../README.md). Experimental. Not production-ready.
+> Part of [owl](../README.md). Early. Not production-ready.
 
 ```cpp
 coro::task<owl::Response> cached(const redis::client& rd, owl::Path<"id", std::int64_t> id) {

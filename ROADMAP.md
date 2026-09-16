@@ -1,7 +1,7 @@
 # Roadmap
 
 What owl is working towards, and what is deliberately not being worked on.
-owl is experimental — see [Stability](README.md#stability). Nothing here is a
+owl is early — see [Stability](README.md#stability). Nothing here is a
 commitment to a date, and the ordering changes.
 
 Per-library detail lives with the library: [`owl`](owl/README.md#roadmap) has

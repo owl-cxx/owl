@@ -16,7 +16,7 @@ coroutine handlers that never leave the event loop.
 </div>
 
 > [!WARNING]
-> Part of [owl](../README.md). Experimental. Not production-ready.
+> Part of [owl](../README.md). Early. Not production-ready.
 
 ```cpp
 #include <owl/owl.h>
