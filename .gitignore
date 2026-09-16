@@ -13,3 +13,5 @@ build/
 .superpowers/
 AGENTS.md
 opencode.json
+/.opencode/
+docs/
