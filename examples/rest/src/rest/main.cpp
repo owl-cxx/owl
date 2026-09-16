@@ -36,14 +36,14 @@ int main(int argc, char** argv) {
     if (!cfg.redis) cfg.redis.emplace();
     rest::migrate(*cfg.psql);
 
-    auto router = owl::Router<rest::App>::make()
+    auto router = owl::Router<rest::AppState>::make()
                   .nest<"/auth">(rest::auth::router())
                   .nest<"/posts">(rest::posts::router());
 
-    const owl::Server<rest::App> server = owl::Server<rest::App>::builder()
+    const owl::Server<rest::AppState> server = owl::Server<rest::AppState>::builder()
                                           .router(std::move(router))
                                           .config(cfg)
-                                          .build_with(std::make_shared<rest::App>());
+                                          .build_with(std::make_shared<rest::AppState>());
 
     std::printf("listening on http://%s:%u  (postgres: %s, redis: %s:%u)\n"
                 "  POST /auth/register\n  POST /auth/login\n  GET  /posts\n  POST /posts  (Authorization: Bearer <token>)\n  GET  /posts/{id}\n",

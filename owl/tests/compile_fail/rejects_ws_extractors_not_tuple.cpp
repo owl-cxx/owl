@@ -1,7 +1,7 @@
 // A controller's Extractors is the tuple its callbacks are unpacked from.
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 struct BadExtractors final {
     using Extractors = int;
@@ -9,5 +9,5 @@ struct BadExtractors final {
 };
 
 void force() {
-    (void)owl::Router<App>::make().ws<"/x", BadExtractors>();
+    (void)owl::Router<AppState>::make().ws<"/x", BadExtractors>();
 }

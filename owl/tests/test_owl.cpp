@@ -1,9 +1,9 @@
 #include <owl/owl.h>
 
 namespace {
-    struct App final {
+    struct AppState final {
         int n = 0;
     };
 }
 
-static_assert(sizeof(owl::Server<App>) >= 1);
+static_assert(sizeof(owl::Server<AppState>) >= 1);

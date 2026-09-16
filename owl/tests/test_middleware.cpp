@@ -75,11 +75,11 @@ namespace {
         return owl::Response::ok("ok");
     }
 
-    struct App final {
+    struct AppState final {
         int n = 7;
     };
 
-    coro::task<owl::Response> timing(const owl::Request& req, owl::Next<App> next) {
+    coro::task<owl::Response> timing(const owl::Request& req, owl::Next<AppState> next) {
         const auto start = std::chrono::steady_clock::now();
         owl::Response res = co_await next(req);
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -88,11 +88,11 @@ namespace {
         co_return std::move(res);
     }
 
-    coro::task<owl::Response> kick(const owl::Request&, owl::Next<App>) {
+    coro::task<owl::Response> kick(const owl::Request&, owl::Next<AppState>) {
         co_return owl::Response::ok("unauthorized", 401);
     }
 
-    coro::task<owl::Response> with_state(const owl::Request& req, const owl::Context<App>& ctx, owl::Next<App> next) {
+    coro::task<owl::Response> with_state(const owl::Request& req, const owl::Context<AppState>& ctx, owl::Next<AppState> next) {
         auto res = co_await next(req);
         res.header("x-n", std::to_string(ctx.state->n));
         co_return std::move(res);
@@ -123,7 +123,7 @@ namespace {
 }
 
 TEST(Middleware, HandlerRunsWithNoLayers) {
-    auto router = owl::Router<App>::make().route<"/ping">(owl::get(ping));
+    auto router = owl::Router<AppState>::make().route<"/ping">(owl::get(ping));
     Fixture fixture;
     fixture.send(run_chain(router, fixture, "/ping"));
     EXPECT_EQ(fixture.capture.body, "pong");
@@ -131,7 +131,7 @@ TEST(Middleware, HandlerRunsWithNoLayers) {
 }
 
 TEST(Middleware, TimingAddsElapsedHeader) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(timing)
                       .route<"/ping">(owl::get(ping));
     Fixture fixture;
@@ -142,7 +142,7 @@ TEST(Middleware, TimingAddsElapsedHeader) {
 
 TEST(Middleware, KickSkipsTheHandler) {
     handler_calls = 0;
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(kick)
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -153,11 +153,11 @@ TEST(Middleware, KickSkipsTheHandler) {
 }
 
 TEST(Middleware, InjectsRouterState) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(with_state)
                       .route<"/ping">(owl::get(ping));
     Fixture fixture;
-    const owl::Context<App> ctx{std::make_shared<App>(App{.n = 9}), nullptr};
+    const owl::Context<AppState> ctx{std::make_shared<AppState>(AppState{.n = 9}), nullptr};
     fixture.send(run_chain(router, fixture, "/ping", ctx));
     EXPECT_EQ(fixture.header("x-n"), "9");
 }
@@ -169,10 +169,10 @@ TEST(Middleware, ExtractsWiredLoopScheduler) {
     h2o_context_t loop_ctx{};
     h2o_context_init(&loop_ctx, h2o_evloop_create(), &conf);
 
-    owl::Context<App> ctx{std::make_shared<App>(), loop_ctx.loop};
+    owl::Context<AppState> ctx{std::make_shared<AppState>(), loop_ctx.loop};
     h2o_multithread_register_receiver(loop_ctx.queue, &ctx.hop, &owl::detail::on_loop_hop);
 
-    auto router = owl::Router<App>::make().route<"/ping">(owl::get(with_loop));
+    auto router = owl::Router<AppState>::make().route<"/ping">(owl::get(with_loop));
     Fixture fixture;
     // sync_wait blocks this thread, so the loop the handler parked on has to
     // be pumped elsewhere for the hop to land.
@@ -195,7 +195,7 @@ TEST(Middleware, ExtractsWiredLoopScheduler) {
 }
 
 TEST(Middleware, UnwiredLoopSchedulerKicks500) {
-    auto router = owl::Router<App>::make().route<"/ping">(owl::get(with_loop));
+    auto router = owl::Router<AppState>::make().route<"/ping">(owl::get(with_loop));
     Fixture fixture;
     fixture.send(run_chain(router, fixture, "/ping"));
     EXPECT_EQ(fixture.req.res.status, 500);
@@ -208,10 +208,10 @@ TEST(Middleware, ExtractsLoopSchedulerByReference) {
     h2o_context_t loop_ctx{};
     h2o_context_init(&loop_ctx, h2o_evloop_create(), &conf);
 
-    owl::Context<App> ctx{std::make_shared<App>(), loop_ctx.loop};
+    owl::Context<AppState> ctx{std::make_shared<AppState>(), loop_ctx.loop};
     h2o_multithread_register_receiver(loop_ctx.queue, &ctx.hop, &owl::detail::on_loop_hop);
 
-    auto router = owl::Router<App>::make().route<"/ping">(owl::get(with_loop_ref));
+    auto router = owl::Router<AppState>::make().route<"/ping">(owl::get(with_loop_ref));
     Fixture fixture;
     // sync_wait blocks this thread, so the loop the handler parked on has to
     // be pumped elsewhere for the hop to land.
@@ -237,7 +237,7 @@ TEST(Middleware, ExtractsLoopSchedulerByReference) {
 }
 
 TEST(Middleware, UnwiredLoopRefKicks500) {
-    auto router = owl::Router<App>::make().route<"/ping">(owl::get(with_loop_ref));
+    auto router = owl::Router<AppState>::make().route<"/ping">(owl::get(with_loop_ref));
     Fixture fixture;
     fixture.send(run_chain(router, fixture, "/ping"));
     EXPECT_EQ(fixture.req.res.status, 500);
@@ -254,10 +254,10 @@ TEST(Middleware, NestedLayerRunsOnlyUnderPrefix) {
         };
     };
 
-    auto inner = owl::Router<App>::make()
+    auto inner = owl::Router<AppState>::make()
                      .layer(tag("inner"))
                      .route<"/ping">(owl::get(ping));
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(tag("outer"))
                       .nest<"/api">(std::move(inner))
                       .route<"/ping">(owl::get(ping));
@@ -281,11 +281,11 @@ TEST(Middleware, ServerChainRunsBeforeRouter) {
         };
     };
 
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(tag("router"))
                       .route<"/ping">(owl::get(ping));
-    owl::MiddlewareChain<App> server;
-    server.emplace_back(owl::wrap_layer<App>(tag("server")));
+    owl::MiddlewareChain<AppState> server;
+    server.emplace_back(owl::wrap_layer<AppState>(tag("server")));
 
     Fixture fixture;
     fixture.send(run_chain(router, fixture, "/ping", {}, &server));

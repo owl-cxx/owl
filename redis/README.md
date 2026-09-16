@@ -166,7 +166,7 @@ Config: `host`, `port`, `username` (empty is the default user), `password`
 ## In owl
 
 ```cpp
-owl::Server<App>::builder()
+owl::Server<AppState>::builder()
     .router(std::move(router))
     .config({.port = 8080, .redis = {{.host = "127.0.0.1", .port = 6379}}})
     .build_with(state)

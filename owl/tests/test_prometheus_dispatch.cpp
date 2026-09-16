@@ -62,7 +62,7 @@ namespace {
         }
     };
 
-    struct App final {
+    struct AppState final {
         int n = 0;
     };
 
@@ -70,7 +70,7 @@ namespace {
         return owl::Response::ok("pong");
     }
 
-    coro::task<owl::Response> kick(const owl::Request&, owl::Next<App>) {
+    coro::task<owl::Response> kick(const owl::Request&, owl::Next<AppState>) {
         co_return owl::Response::ok("unauthorized", 401);
     }
 
@@ -86,15 +86,15 @@ namespace {
         h2o_conn_t conn{};
         h2o_req_t req{};
         Capture capture{};
-        owl::Router<App> router;
-        owl::MiddlewareChain<App> layers;
-        owl::detail::Dispatcher<App>* dispatcher = nullptr;
+        owl::Router<AppState> router;
+        owl::MiddlewareChain<AppState> layers;
+        owl::detail::Dispatcher<AppState>* dispatcher = nullptr;
 
-        explicit Wired(owl::Router<App> routes) : router(std::move(routes)) {
+        explicit Wired(owl::Router<AppState> routes) : router(std::move(routes)) {
             h2o_config_init(&globalconf);
             auto* const hostconf = h2o_config_register_host(&globalconf, h2o_iovec_init(H2O_STRLIT("default")), 65535);
             auto* const pathconf = h2o_config_register_path(hostconf, "/", 0);
-            dispatcher = owl::detail::make_dispatcher<App>(pathconf, &router, &layers, std::make_shared<App>(), owl::Config{});
+            dispatcher = owl::detail::make_dispatcher<AppState>(pathconf, &router, &layers, std::make_shared<AppState>(), owl::Config{});
             h2o_context_init(&ctx, h2o_evloop_create(), &globalconf);
             conn.ctx = &ctx;
             conn.hosts = globalconf.hosts;
@@ -132,12 +132,12 @@ struct DispatchClear : testing::Test {
 };
 
 TEST_F(DispatchClear, RecordsMatchedRequest) {
-    auto router = owl::Router<App>::make().route<"/ping">(owl::get(ping));
+    auto router = owl::Router<AppState>::make().route<"/ping">(owl::get(ping));
     Fixture fixture;
-    auto* const job = owl::detail::Job<App>::make(&fixture.req.pool);
+    auto* const job = owl::detail::Job<AppState>::make(&fixture.req.pool);
     const auto* const handler = router.match(owl::Method::Get, "/ping", *fixture.request, &job->chains);
     ASSERT_NE(handler, nullptr);
-    const owl::Context<App> ctx{std::make_shared<App>(), fixture.ctx.loop};
+    const owl::Context<AppState> ctx{std::make_shared<AppState>(), fixture.ctx.loop};
     job->launch(handler, fixture.request, nullptr, &ctx);
     EXPECT_EQ(fixture.req.res.status, 200);
 
@@ -147,14 +147,14 @@ TEST_F(DispatchClear, RecordsMatchedRequest) {
 }
 
 TEST_F(DispatchClear, RecordsKickedRequest) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(kick)
                       .route<"/ping">(owl::get(ping));
     Fixture fixture;
-    auto* const job = owl::detail::Job<App>::make(&fixture.req.pool);
+    auto* const job = owl::detail::Job<AppState>::make(&fixture.req.pool);
     const auto* const handler = router.match(owl::Method::Get, "/ping", *fixture.request, &job->chains);
     ASSERT_NE(handler, nullptr);
-    const owl::Context<App> ctx{std::make_shared<App>(), fixture.ctx.loop};
+    const owl::Context<AppState> ctx{std::make_shared<AppState>(), fixture.ctx.loop};
     job->launch(handler, fixture.request, nullptr, &ctx);
     EXPECT_EQ(fixture.req.res.status, 401);
 
@@ -163,9 +163,9 @@ TEST_F(DispatchClear, RecordsKickedRequest) {
 }
 
 TEST_F(DispatchClear, RecordsMissesAsUnmatched) {
-    Wired missing{owl::Router<App>::make().route<"/ping">(owl::get(ping))};
+    Wired missing{owl::Router<AppState>::make().route<"/ping">(owl::get(ping))};
     EXPECT_EQ(missing.dispatch("GET", "/nope"), 404);
-    Wired wrong_method{owl::Router<App>::make().route<"/ping">(owl::get(ping))};
+    Wired wrong_method{owl::Router<AppState>::make().route<"/ping">(owl::get(ping))};
     EXPECT_EQ(wrong_method.dispatch("POST", "/ping"), 405);
 
     const std::string body = owl::prometheus::dump();
@@ -176,12 +176,12 @@ TEST_F(DispatchClear, RecordsMissesAsUnmatched) {
 }
 
 TEST_F(DispatchClear, RecordsThrownHandlerAs500) {
-    auto router = owl::Router<App>::make().route<"/boom">(owl::get(boom));
+    auto router = owl::Router<AppState>::make().route<"/boom">(owl::get(boom));
     Fixture fixture;
-    auto* const job = owl::detail::Job<App>::make(&fixture.req.pool);
+    auto* const job = owl::detail::Job<AppState>::make(&fixture.req.pool);
     const auto* const handler = router.match(owl::Method::Get, "/boom", *fixture.request, &job->chains);
     ASSERT_NE(handler, nullptr);
-    const owl::Context<App> ctx{std::make_shared<App>(), fixture.ctx.loop};
+    const owl::Context<AppState> ctx{std::make_shared<AppState>(), fixture.ctx.loop};
     job->launch(handler, fixture.request, nullptr, &ctx);
 
     const std::string body = owl::prometheus::dump();

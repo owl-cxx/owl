@@ -28,20 +28,20 @@ Coroutine handlers stay on the event loop.
 ```cpp
 #include <owl/owl.h>
 
-struct App final {};
+struct AppState final {};
 
 owl::Response ping(owl::RequestView) {
     return owl::Response::ok("pong");
 }
 
 int main() {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                   .route<"/ping">(owl::get(ping));
 
-    owl::Server<App>::builder()
+    owl::Server<AppState>::builder()
         .router(std::move(router))
         .config({.port = 8080})
-        .build_with(std::make_shared<App>())
+        .build_with(std::make_shared<AppState>())
         .start();
 }
 ```
@@ -66,30 +66,30 @@ Each library lives in `include/<name>/` so the prefix is part of the include. Pu
 A handler is a free function. Parameters are extractors; the route pattern is checked against them at compile time.
 
 ```cpp
-struct App { int hits = 0; };
+struct AppState { int hits = 0; };
 
 owl::Response hello(owl::PathView<"name"> name) {
     return owl::Response::ok(std::format("hello {}", name.value));
 }
 
-coro::task<owl::Response> hits(owl::State<App> app) {
+coro::task<owl::Response> hits(owl::State<AppState> app) {
     co_return owl::Response::json(std::format(R"({{"hits":{}}})", ++app->hits));
 }
 
-auto v1 = owl::Router<App>::make()
+auto v1 = owl::Router<AppState>::make()
           .route<"/hits">(owl::get(hits));
 
-auto router = owl::Router<App>::make()
+auto router = owl::Router<AppState>::make()
               .nest<"/api/v1">(std::move(v1))
               .route<"/hello/{name}">(owl::get(hello));
 
-owl::Server<App>::builder()
+owl::Server<AppState>::builder()
     .router(std::move(router))
     .config({.port = 8080})
-    .build_with(std::make_shared<App>());
+    .build_with(std::make_shared<AppState>());
 ```
 
-State is bound on `Server<App>` via `build_with`. `Router<App>` and `Server<App>` share the state type, `nest` only takes the same `S`, and a handler naming `State<T>` for another `T` is a compile error, not a runtime 500.
+State is bound on `Server<AppState>` via `build_with`. `Router<AppState>` and `Server<AppState>` share the state type, `nest` only takes the same `S`, and a handler naming `State<T>` for another `T` is a compile error, not a runtime 500.
 
 A small REST API -- register, login, posts on postgres, sessions on redis -- lives in [`examples/rest`](examples/rest/README.md), a standalone CMake project that consumes owl the way an application does, with a Dockerfile, a compose file, and a monkey test. WebSocket echo, rooms, and a shared chat page live in [`examples/ws`](examples/ws/README.md).
 

@@ -5,7 +5,7 @@
 
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 struct NeedsId final {
     using Extractors = std::tuple<owl::Path<"id", int>>;
@@ -13,5 +13,5 @@ struct NeedsId final {
 };
 
 void force() {
-    (void)owl::Router<App>::make().ws<"/rooms", NeedsId>();
+    (void)owl::Router<AppState>::make().ws<"/rooms", NeedsId>();
 }

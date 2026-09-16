@@ -15,7 +15,7 @@
 #include <owl/owl.h>
 
 namespace {
-    struct App final {};
+    struct AppState final {};
 
     coro::task<void> echo(owl::ws::Socket sock, owl::Path<"user", std::string> user) {
         co_await sock.send(std::format("hello {}", user.value));
@@ -87,16 +87,16 @@ document.getElementById("msg").onkeydown = (e) => {
 int main(int argc, char** argv) {
     const auto cfg = owl::Config::make(argc, argv);
 
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                   .route<"/chat">(owl::get(page))
                   .ws<"/chat/{room}", Chat>()
                   .ws<"/rooms/{id}">(room)
                   .ws<"/echo/{user}">(echo);
 
-    const owl::Server<App> server = owl::Server<App>::builder()
+    const owl::Server<AppState> server = owl::Server<AppState>::builder()
                                     .router(std::move(router))
                                     .config(cfg)
-                                    .build_with(std::make_shared<App>());
+                                    .build_with(std::make_shared<AppState>());
 
     std::printf("listening on http://%s:%u\n  GET  /chat\n  WS   /chat/{room}\n  WS   /rooms/{id}\n  WS   /echo/{user}\n",
                 cfg.address.c_str(), server.port());

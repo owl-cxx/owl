@@ -25,7 +25,7 @@
 #include "support/temp_db.h"
 
 namespace {
-    struct App final {
+    struct AppState final {
     };
 
 #ifdef OWL_ENABLE_REDIS
@@ -52,7 +52,7 @@ namespace {
         h2o_context_t ctx{};
         h2o_conn_t conn{};
         h2o_req_t req{};
-        owl::detail::Dispatcher<App>* dispatcher = nullptr;
+        owl::detail::Dispatcher<AppState>* dispatcher = nullptr;
 
         Fixture(const bool wire_sqlite, const char* const psql_dsn, const bool wire_redis = false) {
             h2o_config_init(&globalconf);
@@ -75,7 +75,7 @@ namespace {
 #else
             (void)wire_redis;
 #endif
-            dispatcher = owl::detail::make_dispatcher<App>(pathconf, nullptr, nullptr, std::make_shared<App>(), std::move(configs));
+            dispatcher = owl::detail::make_dispatcher<AppState>(pathconf, nullptr, nullptr, std::make_shared<AppState>(), std::move(configs));
 
             h2o_context_init(&ctx, h2o_evloop_create(), &globalconf);
             conn.ctx = &ctx;
@@ -99,8 +99,8 @@ namespace {
         }
 
         // Not const: h2o_context_get_handler_context wants a mutable context.
-        const owl::Context<App>& context() {
-            return *static_cast<const owl::Context<App>*>(h2o_context_get_handler_context(&ctx, &dispatcher->super));
+        const owl::Context<AppState>& context() {
+            return *static_cast<const owl::Context<AppState>*>(h2o_context_get_handler_context(&ctx, &dispatcher->super));
         }
 
         // Pumps the loop on its own thread, the way a worker owns it, and
@@ -234,9 +234,9 @@ TEST(OwlWiring, BuilderAcceptsDriversOnConfig) {
 #ifdef OWL_ENABLE_REDIS
     cfg.redis = redis::config{.port = 1};
 #endif
-    const owl::Server<App> server = owl::Server<App>::builder()
-                                        .router(owl::Router<App>::make())
+    const owl::Server<AppState> server = owl::Server<AppState>::builder()
+                                        .router(owl::Router<AppState>::make())
                                         .config(std::move(cfg))
-                                        .build_with(std::make_shared<App>());
+                                        .build_with(std::make_shared<AppState>());
     EXPECT_NE(server.port(), 0);
 }

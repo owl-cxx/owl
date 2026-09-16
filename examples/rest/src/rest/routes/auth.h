@@ -9,8 +9,8 @@
 #include "rest/models.h"
 
 namespace rest::auth {
-    coro::task<owl::Response> register_user(const Db& db, owl::State<App> app, const owl::loop_scheduler& loop, owl::Json<Credentials> body);
-    coro::task<owl::Response> login(const Db& db, const Cache& cache, owl::State<App> app, const owl::loop_scheduler& loop, owl::Json<Credentials> body);
+    coro::task<owl::Response> register_user(const Db& db, owl::State<AppState> app, const owl::loop_scheduler& loop, owl::Json<Credentials> body);
+    coro::task<owl::Response> login(const Db& db, const Cache& cache, owl::State<AppState> app, const owl::loop_scheduler& loop, owl::Json<Credentials> body);
 
-    [[nodiscard]] owl::Router<App> router();
+    [[nodiscard]] owl::Router<AppState> router();
 }

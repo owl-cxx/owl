@@ -2,8 +2,8 @@
 // failing somewhere inside the chain.
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 void force() {
-    (void)owl::Router<App>::make().layer([](int) { return 0; });
+    (void)owl::Router<AppState>::make().layer([](int) { return 0; });
 }

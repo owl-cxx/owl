@@ -3,7 +3,7 @@
 #include <owl/server.h>
 
 namespace {
-    struct App final {
+    struct AppState final {
         int n = 0;
     };
 
@@ -13,8 +13,8 @@ namespace {
 }
 
 int main() {
-    owl::Server<App> server = owl::Server<App>::builder()
-                         .router(owl::Router<App>::make().route<"/ping">(owl::get(ping)))
+    owl::Server<AppState> server = owl::Server<AppState>::builder()
+                         .router(owl::Router<AppState>::make().route<"/ping">(owl::get(ping)))
                          .config({})
                          .build();
     (void)server;

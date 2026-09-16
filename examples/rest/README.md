@@ -7,7 +7,7 @@ sessions and rate limiting in redis.
 | File | axum counterpart | Holds |
 |---|---|---|
 | `src/rest/main.cpp` | `main.rs` | `Config::make`, driver env, migrations, the composed router, the server |
-| `src/rest/app.h` | `state.rs` | `App`, the state every handler can take as `owl::State<App>` |
+| `src/rest/app.h` | `state.rs` | `AppState`, the state every handler can take as `owl::State<AppState>` |
 | `src/rest/db.h/.cpp` | `db.rs` | the schema, applied once at startup through a standalone pool |
 | `monkey.py` | -- | the monkey test: random traffic, then a restart of each dependency under load |
 | `src/rest/auth.h/.cpp` | `auth.rs` + an extractor | PBKDF2 password hashing as tasks, sessions and the login throttle in redis, the `Bearer` extractor |

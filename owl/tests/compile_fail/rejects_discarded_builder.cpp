@@ -3,11 +3,11 @@
 #include <owl/server.h>
 
 namespace {
-    struct App final {
+    struct AppState final {
         int n = 0;
     };
 }
 
 int main() {
-    owl::Server<App>::builder().config({});
+    owl::Server<AppState>::builder().config({});
 }

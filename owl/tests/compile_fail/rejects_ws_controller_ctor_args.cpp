@@ -2,7 +2,7 @@
 // than inside make_shared.
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 struct Echo final {
     explicit Echo(int n) : n(n) {}
@@ -11,5 +11,5 @@ struct Echo final {
 };
 
 void force() {
-    (void)owl::Router<App>::make().ws<"/x", Echo>("not an int");
+    (void)owl::Router<AppState>::make().ws<"/x", Echo>("not an int");
 }

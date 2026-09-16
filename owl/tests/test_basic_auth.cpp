@@ -26,7 +26,7 @@
 #include <owl/util/util.h>
 
 namespace {
-    struct App final {};
+    struct AppState final {};
 
     int handler_calls = 0;
 
@@ -66,14 +66,14 @@ namespace {
             h2o_add_header_by_str(&req.pool, &req.headers, name, std::char_traits<char>::length(name), 1, nullptr, value, std::char_traits<char>::length(value));
         }
 
-        void run(const owl::Router<App>& router, const std::string_view path = "/ping") {
+        void run(const owl::Router<AppState>& router, const std::string_view path = "/ping") {
             req.method = {.base = const_cast<char*>("GET"), .len = 3};
             auto* const request = owl::Request::make(&req);
-            owl::detail::MatchedChains<App> chains{};
+            owl::detail::MatchedChains<AppState> chains{};
             const auto* const handler = router.match(owl::Method::Get, path, *request, &chains);
             ASSERT_NE(handler, nullptr);
-            const owl::Context<App> ctx{};
-            const owl::Next<App> next{chains.splice(nullptr), handler, &ctx};
+            const owl::Context<AppState> ctx{};
+            const owl::Next<AppState> next{chains.splice(nullptr), handler, &ctx};
             sending = coro::sync_wait(next(*request)).send(&req);
             sending.start();
         }
@@ -87,8 +87,8 @@ namespace {
         }
     };
 
-    owl::Router<App> guarded(owl::BasicAuth config) {
-        return owl::Router<App>::make()
+    owl::Router<AppState> guarded(owl::BasicAuth config) {
+        return owl::Router<AppState>::make()
             .layer(owl::basic_auth(std::move(config)))
             .route<"/ping">(owl::get(counted));
     }

@@ -19,7 +19,7 @@
 #include <owl/ws/socket.h>
 
 namespace {
-    struct App {
+    struct AppState {
         int n = 7;
     };
 
@@ -138,7 +138,7 @@ TEST(WsHandshake, UpgradeHeaderAloneIsNotEnough) {
 }
 
 TEST(WsRouter, AnyVersionTakesTheWsSlot) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
         .route<"/chat">(owl::get(page))
         .ws<"/chat">(chat);
     h2o_req_t req{};
@@ -155,7 +155,7 @@ TEST(WsRouter, AnyVersionTakesTheWsSlot) {
 }
 
 TEST(WsRouter, CoroutineFormMatchesOnlyOnUpgrade) {
-    auto router = owl::Router<App>::make().ws<"/rooms/{id}">(room);
+    auto router = owl::Router<AppState>::make().ws<"/rooms/{id}">(room);
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
     req.query_at = SIZE_MAX;
@@ -173,7 +173,7 @@ TEST(WsRouter, CoroutineFormMatchesOnlyOnUpgrade) {
 }
 
 TEST(WsRouter, GetAndWsShareAPath) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
         .route<"/chat">(owl::get(page))
         .ws<"/chat">(chat);
     h2o_req_t req{};
@@ -190,12 +190,12 @@ TEST(WsRouter, GetAndWsShareAPath) {
 }
 
 TEST(WsRouter, WsOnlyPathAllowsNoMethod) {
-    auto router = owl::Router<App>::make().ws<"/chat">(chat);
+    auto router = owl::Router<AppState>::make().ws<"/chat">(chat);
     EXPECT_TRUE(router.allowed_methods("/chat").empty());
 }
 
 TEST(WsRouter, LiteralGetBeatsWsParameter) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
         .route<"/rooms/new">(owl::get(page))
         .ws<"/rooms/{id}">(room);
     h2o_req_t req{};
@@ -211,25 +211,25 @@ TEST(WsRouter, LiteralGetBeatsWsParameter) {
 }
 
 TEST(WsRouter, AcceptsContextReferences) {
-    auto router = owl::Router<App>::make().ws<"/loop">(looped);
+    auto router = owl::Router<AppState>::make().ws<"/loop">(looped);
     EXPECT_EQ(router.size(), 1u);
 }
 
 TEST(WsRouter, DuplicateWsThrows) {
     EXPECT_THROW(
-        (void)owl::Router<App>::make().ws<"/x">(chat).ws<"/x">(chat),
+        (void)owl::Router<AppState>::make().ws<"/x">(chat).ws<"/x">(chat),
         std::invalid_argument);
 }
 
 TEST(WsRouter, NestedWsCollides) {
     EXPECT_THROW(
-        (void)owl::Router<App>::make().ws<"/x/y">(chat)
-            .nest<"/x">(owl::Router<App>::make().ws<"/y">(chat)),
+        (void)owl::Router<AppState>::make().ws<"/x/y">(chat)
+            .nest<"/x">(owl::Router<AppState>::make().ws<"/y">(chat)),
         std::invalid_argument);
 }
 
 TEST(WsRouter, ControllerFromCtorArgs) {
-    auto router = owl::Router<App>::make().ws<"/echo", Echo>(3);
+    auto router = owl::Router<AppState>::make().ws<"/echo", Echo>(3);
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
     req.query_at = SIZE_MAX;
@@ -243,12 +243,12 @@ TEST(WsRouter, ControllerFromCtorArgs) {
 
 TEST(WsRouter, ControllerFromSharedPtr) {
     const auto echo = std::make_shared<Echo>(1);
-    auto router = owl::Router<App>::make().ws<"/echo", Echo>(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo", Echo>(echo);
     EXPECT_EQ(router.size(), 1u);
 }
 
 TEST(WsRouter, NullControllerThrows) {
     EXPECT_THROW(
-        ((void)owl::Router<App>::make().ws<"/echo", Echo>(std::shared_ptr<Echo>{})),
+        ((void)owl::Router<AppState>::make().ws<"/echo", Echo>(std::shared_ptr<Echo>{})),
         std::invalid_argument);
 }

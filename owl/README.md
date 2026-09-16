@@ -29,9 +29,9 @@ owl::Response hello(owl::RequestView, owl::PathView<"name"> name) {
     return owl::Response::ok(std::format("hello {}", name.value));
 }
 
-struct App final {};
+struct AppState final {};
 
-auto router = owl::Router<App>::make()
+auto router = owl::Router<AppState>::make()
               .route<"/ping">(owl::get(ping))
               .route<"/hello/{name}">(owl::get(hello));
 ```
@@ -102,9 +102,9 @@ owl::Response whoami(Bearer token) {
     return owl::Response::ok(std::string{token.token});
 }
 
-struct App final {};
+struct AppState final {};
 
-auto router = owl::Router<App>::make()
+auto router = owl::Router<AppState>::make()
               .route<"/whoami">(owl::get(whoami));
 ```
 
@@ -231,7 +231,7 @@ struct Chat final {
     coro::task<void> on_message(owl::ws::Socket, owl::ws::Message, owl::Path<"room", std::string>);
 };
 
-owl::Router<App>::make()
+owl::Router<AppState>::make()
     .route<"/chat">(owl::get(page))
     .ws<"/chat/{room}", Chat>()
     .ws<"/rooms/{id}">(room);

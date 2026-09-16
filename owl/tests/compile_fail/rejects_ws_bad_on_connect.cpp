@@ -2,7 +2,7 @@
 // callback, which is worse than a missing one.
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 struct BadConnect final {
     void on_message(owl::ws::Socket, owl::ws::Message) {}
@@ -10,5 +10,5 @@ struct BadConnect final {
 };
 
 void force() {
-    (void)owl::Router<App>::make().ws<"/x", BadConnect>();
+    (void)owl::Router<AppState>::make().ws<"/x", BadConnect>();
 }

@@ -74,7 +74,7 @@ namespace {
         }
     };
 
-    struct App {
+    struct AppState {
         int n = 7;
     };
 
@@ -83,9 +83,9 @@ namespace {
         std::move(outer).template nest<"/api">(std::move(inner));
     };
 
-    static_assert(can_nest<owl::Router<App>, owl::Router<App>>);
+    static_assert(can_nest<owl::Router<AppState>, owl::Router<AppState>>);
 
-    owl::Response read_state(owl::State<App> app) {
+    owl::Response read_state(owl::State<AppState> app) {
         return owl::Response::ok(std::to_string(app->n));
     }
 
@@ -93,13 +93,13 @@ namespace {
         return owl::Response::ok(std::string{id.value});
     }
 
-    coro::task<owl::Response> pass_through(const owl::Request& req, owl::Next<App> next) {
+    coro::task<owl::Response> pass_through(const owl::Request& req, owl::Next<AppState> next) {
         co_return co_await next(req);
     }
 }
 
 TEST(Router, MatchesLiteralGet) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -111,7 +111,7 @@ TEST(Router, MatchesLiteralGet) {
 }
 
 TEST(Router, MatchSetsRoutePattern) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -123,7 +123,7 @@ TEST(Router, MatchSetsRoutePattern) {
 }
 
 TEST(Router, UnknownPathIsNull) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -134,7 +134,7 @@ TEST(Router, UnknownPathIsNull) {
 }
 
 TEST(Router, CapturesPathParam) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/users/{id}">(owl::get(echo_id));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -147,7 +147,7 @@ TEST(Router, CapturesPathParam) {
 }
 
 TEST(Router, RoutesStateHandler) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/n">(owl::get(read_state));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -158,9 +158,9 @@ TEST(Router, RoutesStateHandler) {
 }
 
 TEST(Router, NestPrefix) {
-    auto inner = owl::Router<App>::make()
+    auto inner = owl::Router<AppState>::make()
                      .route<"/ping">(owl::get(ping));
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .nest<"/api/v1">(std::move(inner));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -172,9 +172,9 @@ TEST(Router, NestPrefix) {
 }
 
 TEST(Router, NestedMatchSetsFullRoutePattern) {
-    auto inner = owl::Router<App>::make()
+    auto inner = owl::Router<AppState>::make()
                      .route<"/ping">(owl::get(ping));
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .nest<"/api/v1">(std::move(inner));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -186,9 +186,9 @@ TEST(Router, NestedMatchSetsFullRoutePattern) {
 }
 
 TEST(Router, NestStateHandler) {
-    auto inner = owl::Router<App>::make()
+    auto inner = owl::Router<AppState>::make()
                      .route<"/n">(owl::get(read_state));
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .nest<"/api">(std::move(inner));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -199,7 +199,7 @@ TEST(Router, NestStateHandler) {
 }
 
 TEST(Router, OptionsMatchesARouteThatRegisteredNone) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -211,7 +211,7 @@ TEST(Router, OptionsMatchesARouteThatRegisteredNone) {
 }
 
 TEST(Router, OptionsFallbackAnswersNoContentWithAllow) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping).post(ping));
     Answered answered;
     answered.run(router, owl::Method::Options, "/ping");
@@ -221,7 +221,7 @@ TEST(Router, OptionsFallbackAnswersNoContentWithAllow) {
 }
 
 TEST(Router, RegisteredOptionsWinsOverTheFallback) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping).options(custom_options));
     Answered answered;
     answered.run(router, owl::Method::Options, "/ping");
@@ -230,7 +230,7 @@ TEST(Router, RegisteredOptionsWinsOverTheFallback) {
 }
 
 TEST(Router, OptionsOnAWebSocketOnlyPathIsNull) {
-    auto router = owl::Router<App>::make().ws<"/chat">(chat);
+    auto router = owl::Router<AppState>::make().ws<"/chat">(chat);
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
     req.query_at = SIZE_MAX;
@@ -240,7 +240,7 @@ TEST(Router, OptionsOnAWebSocketOnlyPathIsNull) {
 }
 
 TEST(Router, OptionsOnAnIntermediateNodeIsNull) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/api/ping">(owl::get(ping));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
@@ -251,21 +251,21 @@ TEST(Router, OptionsOnAnIntermediateNodeIsNull) {
 }
 
 TEST(Router, AllowedMethodsListOptionsForAnyRoute) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/ping">(owl::get(ping));
     EXPECT_TRUE(router.allowed_methods("/ping").has(owl::Method::Options));
     EXPECT_TRUE(router.allowed_methods("/nope").empty());
 }
 
 TEST(Router, LayerCollectsChain) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(pass_through)
                       .route<"/ping">(owl::get(ping));
     h2o_req_t req{};
     h2o_mem_init_pool(&req.pool);
     req.query_at = SIZE_MAX;
     auto* request = owl::Request::make(&req);
-    owl::detail::MatchedChains<App> chains{};
+    owl::detail::MatchedChains<AppState> chains{};
     ASSERT_NE(router.match(owl::Method::Get, "/ping", *request, &chains), nullptr);
     EXPECT_EQ(chains.count, 1u);
     h2o_mem_clear_pool(&req.pool);

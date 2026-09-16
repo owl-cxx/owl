@@ -34,7 +34,7 @@
 #include <owl/ws/socket.h>
 
 namespace {
-    struct App final {
+    struct AppState final {
     };
 
     [[nodiscard]] int listen_loopback() {
@@ -58,7 +58,7 @@ namespace {
     // can stop. Each worker listens on its own port, so a test chooses the
     // worker a client lands on.
     struct LiveWorker final {
-        owl::MiddlewareChain<App> layers;
+        owl::MiddlewareChain<AppState> layers;
         owl::detail::GlobalConf globalconf;
         std::vector<std::unique_ptr<owl::detail::Worker>> workers;
         std::atomic<bool> stop{false};
@@ -66,11 +66,11 @@ namespace {
         std::vector<std::uint16_t> ports;
         std::uint16_t port = 0;
 
-        explicit LiveWorker(const owl::Router<App>& router, const std::size_t count = 1) {
+        explicit LiveWorker(const owl::Router<AppState>& router, const std::size_t count = 1) {
             std::signal(SIGPIPE, SIG_IGN);
             auto* const host = h2o_config_register_host(&globalconf.conf, h2o_iovec_init(H2O_STRLIT("default")), 65535);
             auto* const path = h2o_config_register_path(host, "/", 0);
-            (void)owl::detail::make_dispatcher<App>(path, &router, &layers, std::make_shared<App>(), {});
+            (void)owl::detail::make_dispatcher<AppState>(path, &router, &layers, std::make_shared<AppState>(), {});
             for (std::size_t i = 0; i < count; ++i) {
                 auto& worker = *workers.emplace_back(std::make_unique<owl::detail::Worker>(&globalconf.conf));
                 const int fd = listen_loopback();
@@ -339,7 +339,7 @@ namespace {
         }
     };
 
-    coro::task<owl::Response> tag_layer(const owl::Request& req, owl::Next<App> next) {
+    coro::task<owl::Response> tag_layer(const owl::Request& req, owl::Next<AppState> next) {
         auto res = co_await next(req);
         res.header("x-layer", "1");
         co_return std::move(res);
@@ -347,7 +347,7 @@ namespace {
 }
 
 TEST(Ws, EchoRoundTrip) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto hs = client.handshake("/echo");
@@ -366,7 +366,7 @@ TEST(Ws, EchoRoundTrip) {
 }
 
 TEST(Ws, HandlerReturnDrainsItsLastSend) {
-    auto router = owl::Router<App>::make().ws<"/bye">(bye);
+    auto router = owl::Router<AppState>::make().ws<"/bye">(bye);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto hs = client.handshake("/bye");
@@ -382,7 +382,7 @@ TEST(Ws, HandlerReturnDrainsItsLastSend) {
 
 TEST(Ws, PeerVanishingEndsTheHandler) {
     peer_gone.store(false);
-    auto router = owl::Router<App>::make().ws<"/vanish">(vanish);
+    auto router = owl::Router<AppState>::make().ws<"/vanish">(vanish);
     LiveWorker worker{router};
     {
         Client client{worker.port};
@@ -399,7 +399,7 @@ TEST(Ws, PeerVanishingEndsTheHandler) {
 }
 
 TEST(Ws, MiddlewareHeadersRideOnThe101) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(tag_layer)
                       .ws<"/echo">(echo);
     LiveWorker worker{router};
@@ -413,7 +413,7 @@ TEST(Ws, MiddlewareHeadersRideOnThe101) {
 }
 
 TEST(Ws, PlainGetOnWsOnlyPathIs404) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto res = client.get("/echo");
@@ -421,7 +421,7 @@ TEST(Ws, PlainGetOnWsOnlyPathIs404) {
 }
 
 TEST(Ws, GetAndWsShareAPath) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .route<"/chat">(owl::get(page))
                       .ws<"/chat">(echo);
     LiveWorker worker{router};
@@ -440,7 +440,7 @@ TEST(Ws, GetAndWsShareAPath) {
 }
 
 TEST(Ws, BadKeyIs400) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto hs = client.handshake("/echo", "short");
@@ -449,7 +449,7 @@ TEST(Ws, BadKeyIs400) {
 
 TEST(Ws, SharedControllerEchoesAcrossTwoConnections) {
     const auto echo = std::make_shared<SharedEcho>();
-    auto router = owl::Router<App>::make().ws<"/echo", SharedEcho>(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo", SharedEcho>(echo);
     LiveWorker worker{router};
     for (int i = 0; i < 2; ++i) {
         Client client{worker.port};
@@ -504,7 +504,7 @@ namespace {
 
 TEST(Ws, ThrowingControllerStillDisconnects) {
     const auto faulty = std::make_shared<Faulty>();
-    auto router = owl::Router<App>::make().ws<"/faulty", Faulty>(faulty);
+    auto router = owl::Router<AppState>::make().ws<"/faulty", Faulty>(faulty);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto hs = client.handshake("/faulty");
@@ -517,7 +517,7 @@ TEST(Ws, ThrowingControllerStillDisconnects) {
 }
 
 TEST(Ws, ThrowingHandlerClosesWith1011) {
-    auto router = owl::Router<App>::make().ws<"/boom">(boom);
+    auto router = owl::Router<AppState>::make().ws<"/boom">(boom);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto hs = client.handshake("/boom");
@@ -528,7 +528,7 @@ TEST(Ws, ThrowingHandlerClosesWith1011) {
 }
 
 TEST(Ws, OtherVersionIs426WithVersion13) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     const auto hs = client.handshake("/echo", "dGhlIHNhbXBsZSBub25jZQ==", "8");
@@ -537,7 +537,7 @@ TEST(Ws, OtherVersionIs426WithVersion13) {
 }
 
 TEST(Ws, MissingKeyIs400) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     EXPECT_EQ(client.handshake("/echo", "").status, 400);
@@ -586,7 +586,7 @@ namespace {
 
 TEST(Ws, ClosingAnotherConnectionDoesNotRunItsHandlerInline) {
     const auto kicker = std::make_shared<Kicker>();
-    auto router = owl::Router<App>::make().ws<"/kick", Kicker>(kicker);
+    auto router = owl::Router<AppState>::make().ws<"/kick", Kicker>(kicker);
     LiveWorker worker{router};
     Client a{worker.port};
     Client b{worker.port};
@@ -658,7 +658,7 @@ namespace {
 
 TEST(Ws, BroadcastReachesAPeerOnAnotherWorker) {
     const auto hub = std::make_shared<Broadcast>();
-    auto router = owl::Router<App>::make().ws<"/hub", Broadcast>(hub);
+    auto router = owl::Router<AppState>::make().ws<"/hub", Broadcast>(hub);
     LiveWorker workers{router, 2};
     Client a{workers.ports[0]};
     Client b{workers.ports[1]};
@@ -679,7 +679,7 @@ TEST(Ws, BroadcastReachesAPeerOnAnotherWorker) {
 
 TEST(Ws, SocketKeptPastItsConnectionIsInert) {
     const auto keeper = std::make_shared<Keeper>();
-    auto router = owl::Router<App>::make().ws<"/keep", Keeper>(keeper);
+    auto router = owl::Router<AppState>::make().ws<"/keep", Keeper>(keeper);
     LiveWorker worker{router};
     {
         Client client{worker.port};
@@ -744,7 +744,7 @@ namespace {
 TEST(Ws, UnreadSendsPastTheCapDropTheConnection) {
     const LimitsGuard guard{{.max_unsent_bytes = 256 * 1024}};
     flood_sent.store(-1);
-    auto router = owl::Router<App>::make().ws<"/flood">(flood);
+    auto router = owl::Router<AppState>::make().ws<"/flood">(flood);
     LiveWorker worker{router};
     Client client{worker.port};
     ASSERT_EQ(client.handshake("/flood").status, 101);
@@ -758,7 +758,7 @@ TEST(Ws, UnreadSendsPastTheCapDropTheConnection) {
 TEST(Ws, UnreadBacklogPausesReading) {
     const LimitsGuard guard{{.max_pending_bytes = 64 * 1024}};
     stall_done.store(false);
-    auto router = owl::Router<App>::make().ws<"/stall">(stall);
+    auto router = owl::Router<AppState>::make().ws<"/stall">(stall);
     LiveWorker worker{router};
     {
         Client client{worker.port};
@@ -790,7 +790,7 @@ TEST(Ws, UnreadBacklogPausesReading) {
 TEST(Ws, SilentPeerIsPingedThenDropped) {
     const LimitsGuard guard{{.idle_ping_ms = 100}};
     peer_gone.store(false);
-    auto router = owl::Router<App>::make().ws<"/vanish">(vanish);
+    auto router = owl::Router<AppState>::make().ws<"/vanish">(vanish);
     LiveWorker worker{router};
     Client client{worker.port};
     ASSERT_EQ(client.handshake("/vanish").status, 101);
@@ -803,7 +803,7 @@ TEST(Ws, SilentPeerIsPingedThenDropped) {
 
 TEST(Ws, PongKeepsAQuietPeerConnected) {
     const LimitsGuard guard{{.idle_ping_ms = 100}};
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     ASSERT_EQ(client.handshake("/echo").status, 101);
@@ -830,7 +830,7 @@ TEST(Ws, PongKeepsAQuietPeerConnected) {
 // fails the connection with 1007, so owl adds no check of its own; these
 // two pin that behaviour, and that binary frames are left alone.
 TEST(Ws, InvalidUtf8TextClosesWith1007) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     ASSERT_EQ(client.handshake("/echo").status, 101);
@@ -839,7 +839,7 @@ TEST(Ws, InvalidUtf8TextClosesWith1007) {
 }
 
 TEST(Ws, BinaryFramesAreNotUtf8Checked) {
-    auto router = owl::Router<App>::make().ws<"/echo">(echo);
+    auto router = owl::Router<AppState>::make().ws<"/echo">(echo);
     LiveWorker worker{router};
     Client client{worker.port};
     ASSERT_EQ(client.handshake("/echo").status, 101);

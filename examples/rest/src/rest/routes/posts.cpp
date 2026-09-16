@@ -31,8 +31,8 @@ namespace rest::posts {
         co_return owl::Response::json(nlohmann::json{{"id", r[0][0].as<std::int64_t>()}}, 201);
     }
 
-    owl::Router<App> router() {
-        return owl::Router<App>::make()
+    owl::Router<AppState> router() {
+        return owl::Router<AppState>::make()
                .route<"/">(owl::get(list).post(create))
                .route<"/{id}">(owl::get(show));
     }

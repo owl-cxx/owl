@@ -4,7 +4,7 @@
 
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 struct HoldsView final {
     using Extractors = std::tuple<owl::PathView<"id">>;
@@ -12,5 +12,5 @@ struct HoldsView final {
 };
 
 void force() {
-    (void)owl::Router<App>::make().ws<"/rooms/{id}", HoldsView>();
+    (void)owl::Router<AppState>::make().ws<"/rooms/{id}", HoldsView>();
 }

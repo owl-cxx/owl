@@ -2,8 +2,8 @@
 // where a handler can declare and extract it.
 #include <owl/routing/router.h>
 
-struct App final {};
+struct AppState final {};
 
 void force() {
-    (void)owl::Router<App>::make().nest<"/{tenant}">(owl::Router<App>::make());
+    (void)owl::Router<AppState>::make().nest<"/{tenant}">(owl::Router<AppState>::make());
 }

@@ -13,7 +13,7 @@
 namespace rest::auth {
     coro::task<owl::Response> register_user(
         const Db& db,
-        const owl::State<App> app,
+        const owl::State<AppState> app,
         const owl::loop_scheduler& loop,
         const owl::Json<Credentials> body
     ) {
@@ -39,7 +39,7 @@ namespace rest::auth {
     coro::task<owl::Response> login(
         const Db& db,
         const Cache& cache,
-        const owl::State<App> app,
+        const owl::State<AppState> app,
         const owl::loop_scheduler& loop,
         const owl::Json<Credentials> body
     ) {
@@ -59,8 +59,8 @@ namespace rest::auth {
         co_return owl::Response::json(nlohmann::json{{"token", token}});
     }
 
-    owl::Router<App> router() {
-        return owl::Router<App>::make()
+    owl::Router<AppState> router() {
+        return owl::Router<AppState>::make()
                .route<"/register">(owl::post(register_user))
                .route<"/login">(owl::post(login));
     }

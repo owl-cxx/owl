@@ -4,7 +4,7 @@
 #include <owl/routing/router.h>
 
 namespace {
-    struct App {
+    struct AppState {
         int n = 0;
     };
 
@@ -19,6 +19,6 @@ namespace {
 
 int main() {
     auto inner = owl::Router<Other>::make().route<"/ping">(owl::get(ping));
-    auto router = owl::Router<App>::make().nest<"/api">(std::move(inner));
+    auto router = owl::Router<AppState>::make().nest<"/api">(std::move(inner));
     (void)router;
 }

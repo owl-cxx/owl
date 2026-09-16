@@ -22,7 +22,7 @@
 #include <owl/util/util.h>
 
 namespace {
-    struct App final {};
+    struct AppState final {};
 
     int handler_calls = 0;
 
@@ -35,7 +35,7 @@ namespace {
         return owl::Response::ok("ok").header("vary", "Accept-Encoding");
     }
 
-    coro::task<owl::Response> kick(const owl::Request&, owl::Next<App>) {
+    coro::task<owl::Response> kick(const owl::Request&, owl::Next<AppState>) {
         co_return owl::Response::ok("unauthorized", 401);
     }
 
@@ -73,15 +73,15 @@ namespace {
         // Headers are added before the Request is made, so the chain sees
         // them the way dispatch would; the method too, since the layer
         // reads it off the Request rather than being told.
-        void run(const owl::Router<App>& router, const owl::Method method, const std::string_view path) {
+        void run(const owl::Router<AppState>& router, const owl::Method method, const std::string_view path) {
             const auto name = owl::to_string(method);
             req.method = {.base = const_cast<char*>(name.data()), .len = name.size()};
             auto* const request = owl::Request::make(&req);
-            owl::detail::MatchedChains<App> chains{};
+            owl::detail::MatchedChains<AppState> chains{};
             const auto* const handler = router.match(method, path, *request, &chains);
             ASSERT_NE(handler, nullptr);
-            const owl::Context<App> ctx{};
-            const owl::Next<App> next{chains.splice(nullptr), handler, &ctx};
+            const owl::Context<AppState> ctx{};
+            const owl::Next<AppState> next{chains.splice(nullptr), handler, &ctx};
             sending = coro::sync_wait(next(*request)).send(&req);
             sending.start();
         }
@@ -105,7 +105,7 @@ namespace {
 }
 
 TEST(Cors, LeavesARequestWithoutOriginAlone) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -117,7 +117,7 @@ TEST(Cors, LeavesARequestWithoutOriginAlone) {
 }
 
 TEST(Cors, AnyOriginIsAStarWithoutVary) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -129,7 +129,7 @@ TEST(Cors, AnyOriginIsAStarWithoutVary) {
 }
 
 TEST(Cors, EchoesAListedOriginAndVaries) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({.origins = {"https://a.example.com", "https://b.example.com"}}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -140,7 +140,7 @@ TEST(Cors, EchoesAListedOriginAndVaries) {
 }
 
 TEST(Cors, LeavesAnUnlistedOriginAloneButStillServes) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({.origins = {"https://a.example.com"}}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -152,7 +152,7 @@ TEST(Cors, LeavesAnUnlistedOriginAloneButStillServes) {
 }
 
 TEST(Cors, OriginsCompareExactly) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({.origins = {"https://a.example.com"}}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -162,7 +162,7 @@ TEST(Cors, OriginsCompareExactly) {
 }
 
 TEST(Cors, CredentialsAndExposedHeadersRideOnTheResponse) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({
                           .origins = {"https://a.example.com"},
                           .expose = {"x-trace", "x-request-id"},
@@ -177,7 +177,7 @@ TEST(Cors, CredentialsAndExposedHeadersRideOnTheResponse) {
 }
 
 TEST(Cors, MergesVaryWithTheHandlers) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({.origins = {"https://a.example.com"}}))
                       .route<"/ping">(owl::get(varied));
     Fixture fixture;
@@ -187,7 +187,7 @@ TEST(Cors, MergesVaryWithTheHandlers) {
 }
 
 TEST(Cors, PreflightShortCircuitsBeforeTheHandler) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -204,7 +204,7 @@ TEST(Cors, PreflightShortCircuitsBeforeTheHandler) {
 }
 
 TEST(Cors, PreflightMirrorsRequestedHeaders) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -217,7 +217,7 @@ TEST(Cors, PreflightMirrorsRequestedHeaders) {
 }
 
 TEST(Cors, PreflightUsesConfiguredMethodsAndHeaders) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({
                           .methods = {owl::Method::Get, owl::Method::Post},
                           .headers = {"authorization", "content-type"},
@@ -234,7 +234,7 @@ TEST(Cors, PreflightUsesConfiguredMethodsAndHeaders) {
 }
 
 TEST(Cors, PreflightCarriesMaxAgeAndCredentialsForAListedOrigin) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({
                           .origins = {"https://a.example.com"},
                           .credentials = true,
@@ -252,7 +252,7 @@ TEST(Cors, PreflightCarriesMaxAgeAndCredentialsForAListedOrigin) {
 }
 
 TEST(Cors, PreflightFromAnUnlistedOriginGetsNoGrant) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({.origins = {"https://a.example.com"}}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
@@ -266,7 +266,7 @@ TEST(Cors, PreflightFromAnUnlistedOriginGetsNoGrant) {
 }
 
 TEST(Cors, PreflightNeverReachesAnInnerLayer) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({}))
                       .layer(kick)
                       .route<"/ping">(owl::get(counted));
@@ -279,7 +279,7 @@ TEST(Cors, PreflightNeverReachesAnInnerLayer) {
 }
 
 TEST(Cors, PlainOptionsIsNotAPreflight) {
-    auto router = owl::Router<App>::make()
+    auto router = owl::Router<AppState>::make()
                       .layer(owl::cors({}))
                       .route<"/ping">(owl::get(counted));
     Fixture fixture;
