@@ -12,7 +12,7 @@ across them is painful to revise after the fact.
 
 ## Where to start
 
-Issues tagged [good first issue](https://github.com/MrAdkhambek/owl/labels/good%20first%20issue)
+Issues tagged [good first issue](https://github.com/owl-cxx/owl/labels/good%20first%20issue)
 are self-contained and have a clear definition of done. If nothing there
 appeals, adding a test for an untested path is always worth doing.
 

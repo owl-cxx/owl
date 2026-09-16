@@ -7,5 +7,5 @@ contact_links:
     url: https://discord.gg/RxdpFxb65j
     about: Same, in chat form.
   - name: Contributing guide
-    url: https://github.com/MrAdkhambek/owl/blob/main/CONTRIBUTING.md
+    url: https://github.com/owl-cxx/owl/blob/main/CONTRIBUTING.md
     about: Build, tests, layering rules, and the commit style.

@@ -7,7 +7,7 @@
 Routes and extractors are checked at compile time.<br>
 Coroutine handlers stay on the event loop.
 
-[![CI](https://github.com/MrAdkhambek/owl/actions/workflows/ci.yml/badge.svg)](https://github.com/MrAdkhambek/owl/actions/workflows/ci.yml)
+[![CI](https://github.com/owl-cxx/owl/actions/workflows/ci.yml/badge.svg)](https://github.com/owl-cxx/owl/actions/workflows/ci.yml)
 [![Linux](https://img.shields.io/badge/Linux-GCC%2014-FCC624?logo=linux&logoColor=black)](CONTRIBUTING.md#build)
 [![macOS](https://img.shields.io/badge/macOS-Apple%20clang-000000?logo=apple&logoColor=white)](CONTRIBUTING.md#build)
 [![C++](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/23)
@@ -23,7 +23,7 @@ Coroutine handlers stay on the event loop.
 
 **Status:** early — APIs will move. **License:** MIT. **Build:** see [Install](#install).
 **Want to help:** see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[good first issue](https://github.com/MrAdkhambek/owl/labels/good%20first%20issue) label.
+[good first issue](https://github.com/owl-cxx/owl/labels/good%20first%20issue) label.
 
 ```cpp
 #include <owl/owl.h>
@@ -161,7 +161,7 @@ revise after the fact.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the build, the test suite, the
 layering and `detail/` rules, and the commit style. Issues tagged
-[good first issue](https://github.com/MrAdkhambek/owl/labels/good%20first%20issue)
+[good first issue](https://github.com/owl-cxx/owl/labels/good%20first%20issue)
 are self-contained and have a clear definition of done. [ROADMAP.md](ROADMAP.md) has what is
 being worked on, what is next, and what is deliberately not planned.
 

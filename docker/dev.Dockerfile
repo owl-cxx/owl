@@ -3,7 +3,7 @@
 # The environment owl builds and tests in. Every CI build job runs in this
 # image, and a contributor gets the same environment with:
 #
-#   docker run --rm -it -v "$PWD:/src" -w /src ghcr.io/mradkhambek/owl-dev
+#   docker run --rm -it -v "$PWD:/src" -w /src ghcr.io/owl-cxx/owl-dev
 #
 # Two things owl needs are absent from Ubuntu's archive at the required
 # versions and are fetched here: CMake 4.3 (apt has 3.28) and libh2o-evloop
