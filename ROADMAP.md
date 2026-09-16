@@ -25,6 +25,7 @@ rather than dropping them.
 
 | | |
 |---|---|
+| **HTTP client** | Outbound requests from a handler, awaited on the worker's own event loop rather than a thread pool. h2o ships `h2o_httpclient`, so the reactor and the connection pooling already exist; the work is a `coro::task`-shaped API over it. |
 | **Static files** | A route that sendfiles a directory. Range requests after that. |
 | **TLS** | HTTPS as a `Server::Builder` switch; h2o already links OpenSSL. |
 | **Graceful shutdown** | Stop listeners, drain in-flight handlers, then join workers. |
