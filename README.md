@@ -48,14 +48,14 @@ int main() {
 
 ## Libraries
 
-| | Target | Include | One-liner |
-|---|---|---|---|
-| [**owl**](owl/README.md) | `owl::owl` | `<owl/owl.h>` | Typed routes on libh2o; coroutine handlers stay on the event loop |
-| [**coro**](coro/README.md) | `owl::coro` | `<coro/coro.h>` | Lazy tasks, generators, schedulers, an I/O reactor |
-| [**fstr**](fstr/README.md) | `owl::fstr` | `<fstr/fstr.h>` | String literals as structural NTTPs |
-| [**prometheus**](prometheus/README.md) | `owl::prometheus` | `<prometheus/prometheus.h>` | Counters, gauges, histograms, HTTP RED; standalone; `-DOWL_ENABLE_PROMETHEUS=ON` |
-| [**sql**](sql/README.md) | `owl::sql` | `<sql/sql.h>` | Async SQLite (on by default) and Postgres (`-DOWL_ENABLE_POSTGRESQL=ON`) for handlers |
-| [**redis**](redis/README.md) | `owl::redis` | `<redis/redis.h>` | Async Redis for handlers: pipelined commands, pub/sub streams; `-DOWL_ENABLE_REDIS=ON` |
+|                                        | Target            | Include                     | One-liner                                                                              |
+|----------------------------------------|-------------------|-----------------------------|----------------------------------------------------------------------------------------|
+| [**owl**](owl/README.md)               | `owl::owl`        | `<owl/owl.h>`               | Typed routes on libh2o; coroutine handlers stay on the event loop                      |
+| [**coro**](coro/README.md)             | `owl::coro`       | `<coro/coro.h>`             | Lazy tasks, generators, schedulers, an I/O reactor                                     |
+| [**fstr**](fstr/README.md)             | `owl::fstr`       | `<fstr/fstr.h>`             | String literals as structural NTTPs                                                    |
+| [**prometheus**](prometheus/README.md) | `owl::prometheus` | `<prometheus/prometheus.h>` | Counters, gauges, histograms, HTTP RED; standalone; `-DOWL_ENABLE_PROMETHEUS=ON`       |
+| [**sql**](sql/README.md)               | `owl::sql`        | `<sql/sql.h>`               | Async SQLite (on by default) and Postgres (`-DOWL_ENABLE_POSTGRESQL=ON`) for handlers  |
+| [**redis**](redis/README.md)           | `owl::redis`      | `<redis/redis.h>`           | Async Redis for handlers: pipelined commands, pub/sub streams; `-DOWL_ENABLE_REDIS=ON` |
 
 `owl::owl` pulls `owl::coro`, `owl::fstr`, `libh2o-evloop`, nlohmann_json, OpenSSL, and zlib. `owl::coro` pulls Threads. `owl::fstr` stands alone. `owl::prometheus` stands alone; with `-DOWL_ENABLE_PROMETHEUS=ON` it is `owl::owl` that pulls it, and dispatch records HTTP RED automatically. `owl::sql` pulls `owl::coro`, `owl::fstr`, and sqlite3 and/or libpq per option; with either driver on (sqlite is, unless `-DOWL_ENABLE_SQLITE=OFF`), `owl::owl` pulls it and the server wires per-worker pools. `owl::redis` pulls `owl::coro` and hiredis; with `-DOWL_ENABLE_REDIS=ON`, `owl::owl` pulls it and the server wires a per-worker client.
 
@@ -140,14 +140,14 @@ A custom prefix needs `CMAKE_PREFIX_PATH`.
 
 `owl::owl` needs these on the machine (found via CMake / pkg-config):
 
-| | |
-|---|---|
-| `libh2o-evloop` | pkg-config `libh2o-evloop`, built with `H2O_USE_LIBUV=0` |
-| OpenSSL | `find_package(OpenSSL)` — on macOS, `brew install openssl@3` |
-| zlib | `find_package(ZLIB)` |
-| nlohmann_json | FetchContent when using `add_subdirectory`; `find_package` after install |
-| libpq | `find_package(PostgreSQL)` for `-DOWL_ENABLE_POSTGRESQL=ON`; on macOS, `brew install libpq` |
-| sqlite3 | `find_package(SQLite3)`, on by default (`-DOWL_ENABLE_SQLITE=OFF` drops it); on macOS, `brew install sqlite` |
+|                 |                                                                                                              |
+|-----------------|--------------------------------------------------------------------------------------------------------------|
+| `libh2o-evloop` | pkg-config `libh2o-evloop`, built with `H2O_USE_LIBUV=0`                                                     |
+| OpenSSL         | `find_package(OpenSSL)` — on macOS, `brew install openssl@3`                                                 |
+| zlib            | `find_package(ZLIB)`                                                                                         |
+| nlohmann_json   | FetchContent when using `add_subdirectory`; `find_package` after install                                     |
+| libpq           | `find_package(PostgreSQL)` for `-DOWL_ENABLE_POSTGRESQL=ON`; on macOS, `brew install libpq`                  |
+| sqlite3         | `find_package(SQLite3)`, on by default (`-DOWL_ENABLE_SQLITE=OFF` drops it); on macOS, `brew install sqlite` |
 
 `owl::coro` needs Threads. `owl::fstr` needs nothing.
 

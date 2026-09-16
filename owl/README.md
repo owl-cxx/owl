@@ -65,19 +65,19 @@ owl::Response login(owl::RequestView) {
 
 ## Extractors
 
-| Parameter                            | Source                  | Missing / malformed |
-|--------------------------------------|-------------------------|---------------------|
-| `RequestView`                        | the request itself      | —                   |
-| `PathView<"n">` / `Path<"n", T>`     | path segment            | 404                 |
-| `QueryView<"q">` / `Query<"q", T>`   | query string            | 400                 |
-| `HeaderView<"h">` / `Header<"h", T>` | header                  | 400                 |
-| `BodyView`                           | raw body                | —                   |
-| `Json<T>`                            | JSON body               | 415 / 400 / 422     |
-| `State<T>`                           | router state            | 500                 |
+| Parameter                            | Source                                                             | Missing / malformed |
+|--------------------------------------|--------------------------------------------------------------------|---------------------|
+| `RequestView`                        | the request itself                                                 | —                   |
+| `PathView<"n">` / `Path<"n", T>`     | path segment                                                       | 404                 |
+| `QueryView<"q">` / `Query<"q", T>`   | query string                                                       | 400                 |
+| `HeaderView<"h">` / `Header<"h", T>` | header                                                             | 400                 |
+| `BodyView`                           | raw body                                                           | —                   |
+| `Json<T>`                            | JSON body                                                          | 415 / 400 / 422     |
+| `State<T>`                           | router state                                                       | 500                 |
 | `loop_scheduler`                     | the worker's event loop, bound with no copy when taken as `const&` | 500                 |
-| `const sql::pool<sql::psql>&`        | the worker's postgres pool (`-DOWL_ENABLE_POSTGRESQL=ON`) | 500                 |
-| `const sql::pool<sql::sqlite>&`      | the worker's sqlite pool (on by default)                  | 500                 |
-| `const redis::client&`               | the worker's Redis client (`-DOWL_ENABLE_REDIS=ON`)         | 500                 |
+| `const sql::pool<sql::psql>&`        | the worker's postgres pool (`-DOWL_ENABLE_POSTGRESQL=ON`)          | 500                 |
+| `const sql::pool<sql::sqlite>&`      | the worker's sqlite pool (on by default)                           | 500                 |
+| `const redis::client&`               | the worker's Redis client (`-DOWL_ENABLE_REDIS=ON`)                | 500                 |
 
 A custom extractor is one `FromContext` specialization — the built-ins in `extract/from_context.h` are the same protocol, and make good reference. The parameter type is the value the handler receives; the specialization answers either that value or a `KickToken`, which carries any status, so `401` needs no special support:
 
