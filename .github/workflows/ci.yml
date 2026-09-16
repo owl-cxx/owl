@@ -20,7 +20,16 @@ jobs:
   default:
     name: default options
     runs-on: ubuntu-latest
-    container: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+      # Needed while the GHCR package is private. Harmless once it is public,
+      # and public is what lets pull requests from forks pull it at all.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -30,7 +39,16 @@ jobs:
   full:
     name: all libraries + live services
     runs-on: ubuntu-latest
-    container: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+      # Needed while the GHCR package is private. Harmless once it is public,
+      # and public is what lets pull requests from forks pull it at all.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     services:
       postgres:
         image: postgres:17-alpine
@@ -63,7 +81,16 @@ jobs:
   asan:
     name: asan + ubsan
     runs-on: ubuntu-latest
-    container: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+      # Needed while the GHCR package is private. Harmless once it is public,
+      # and public is what lets pull requests from forks pull it at all.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - run: |
