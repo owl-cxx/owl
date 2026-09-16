@@ -26,10 +26,12 @@ rather than dropping them.
 | | |
 |---|---|
 | **HTTP client** | Outbound requests from a handler, awaited on the worker's own event loop rather than a thread pool. h2o ships `h2o_httpclient`, so the reactor and the connection pooling already exist; the work is a `coro::task`-shaped API over it. |
+| **HTTP controller** | The `ws::controller` pattern for HTTP routes: one class grouping related routes with their shared setup, instead of free functions each reaching for `State<T>`. Same contract as the WebSocket one -- a single instance built at registration and reached from every worker, so it must be safe for concurrent use. |
 | **Static files** | A route that sendfiles a directory. Range requests after that. |
 | **TLS** | HTTPS as a `Server::Builder` switch; h2o already links OpenSSL. |
 | **Graceful shutdown** | Stop listeners, drain in-flight handlers, then join workers. |
 | **WebSocket backpressure** | `send` currently has none. Controller extractors also still need a declared `using Extractors` tuple rather than deduction from `on_message`. |
+| **C++26 reflection in `sql`** | Map a row onto a struct by its members instead of `(*r)[0][0].as<T>()`, and derive column lists and placeholders from the type rather than repeating them in the query literal. The same facility would let a controller deduce its extractor pack instead of declaring `using Extractors`. Gated on compiler support for P2996; owl targets C++23 until that is real. |
 
 ## Good first issues
 
