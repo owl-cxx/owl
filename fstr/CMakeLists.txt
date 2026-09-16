@@ -33,6 +33,9 @@ if (BUILD_TESTING)
         add_test(NAME ${name}
                 COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}"
                         --target ${name} --config $<CONFIG>)
+        # Each of these shells out to `cmake --build` on the shared binary
+        # directory; concurrent ninja runs there would race on .ninja_deps.
+        set_tests_properties(${name} PROPERTIES RESOURCE_LOCK owl_build_dir)
         set_tests_properties(${name} PROPERTIES WILL_FAIL TRUE)
     endfunction()
 

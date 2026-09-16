@@ -29,8 +29,14 @@ RUN arch="$(uname -m)" \
 
 ENV CC=gcc-14 CXX=g++-14
 
-ARG H2O_REF=master
-RUN git clone --depth 1 --branch "${H2O_REF}" --recurse-submodules --shallow-submodules https://github.com/h2o/h2o.git /tmp/h2o \
+# Same pin as docker/dev.Dockerfile: tracking master lets an upstream commit
+# break pull requests with no change in this repository.
+ARG H2O_REF=cac7e6568ad98a848f099ecd0a18b881f632479a
+RUN git init /tmp/h2o \
+    && git -C /tmp/h2o remote add origin https://github.com/h2o/h2o.git \
+    && git -C /tmp/h2o fetch --depth 1 origin "${H2O_REF}" \
+    && git -C /tmp/h2o checkout FETCH_HEAD \
+    && git -C /tmp/h2o submodule update --init --recursive --depth 1 \
     && cmake -S /tmp/h2o -B /tmp/h2o/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_MRUBY=OFF \
     && cmake --build /tmp/h2o/build \
     && cmake --install /tmp/h2o/build \

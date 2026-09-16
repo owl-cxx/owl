@@ -30,11 +30,8 @@ jobs:
       - name: Read the pinned h2o commit
         id: pin
         run: |
-          sha=$(sed -n 's/^ARG H2O_REF=//p' docker/dev.Dockerfile)
-          if [ -z "$sha" ]; then
-              echo "no ARG H2O_REF in docker/dev.Dockerfile"
-              exit 1
-          fi
+          sha=$(sed -n 's/^ARG H2O_REF=//p' docker/dev.Dockerfile | head -1)
+          [ -n "$sha" ] || { echo "no ARG H2O_REF in docker/dev.Dockerfile"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       # The scheduled run rebuilds the same pin on purpose: it catches drift
@@ -62,21 +59,17 @@ jobs:
       - name: Compare the pin against h2o master
         id: check
         run: |
-          pinned=$(sed -n 's/^ARG H2O_REF=//p' docker/dev.Dockerfile)
+          pinned=$(sed -n 's/^ARG H2O_REF=//p' docker/dev.Dockerfile | head -1)
+          [ -n "$pinned" ] || { echo "no ARG H2O_REF in docker/dev.Dockerfile"; exit 1; }
           head=$(git ls-remote https://github.com/h2o/h2o.git HEAD | cut -f1)
           echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
           echo "head=$head" >> "$GITHUB_OUTPUT"
-          if [ "$pinned" = "$head" ]; then
-              echo "diverged=false" >> "$GITHUB_OUTPUT"
-          else
-              echo "diverged=true" >> "$GITHUB_OUTPUT"
-          fi
 
       # Divergence is reported, never enforced. Bumping the pin is a
       # deliberate act, so this opens or updates one tracking issue and
       # otherwise stays out of the way.
       - name: Open or update the tracking issue
-        if: steps.check.outputs.diverged == 'true'
+        if: steps.check.outputs.pinned != steps.check.outputs.head
         uses: actions/github-script@v7
         env:
           PINNED: ${{ steps.check.outputs.pinned }}

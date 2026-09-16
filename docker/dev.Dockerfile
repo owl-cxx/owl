@@ -16,14 +16,14 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# postgresql-client and redis-tools are here for waiting on service
-# containers; python3 runs examples/rest/monkey.py.
+# python3 is here so a contributor can run examples/rest/monkey.py inside the
+# image. CI waits on its service containers with Docker health-cmds, which run
+# inside those containers, so no postgres/redis client is needed here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git pkg-config ninja-build python3 \
         gcc-14 g++-14 \
         libssl-dev zlib1g-dev libuv1-dev libpq-dev libhiredis-dev libwslay-dev \
         libsqlite3-dev \
-        postgresql-client redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
 ARG CMAKE_VERSION=4.3.0

@@ -6,27 +6,24 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Known-flaky tests, excluded by name so that a red run means a real break.
-  # A permanently-red CI deters contribution more than no CI does.
-  #   test_when_any        -- intermittent, see the tracking issue
-  #   test_loop_scheduler  -- use-after-free at teardown, see the tracking issue
-  FLAKY: test_when_any|test_loop_scheduler
+# Every job here only reads. The three container jobs additionally pull the
+# dev image from GHCR, which is what `packages: read` covers.
+permissions:
+  contents: read
+  packages: read
 
+# The `credentials:` on each container job are needed while the GHCR package
+# is private. They are harmless once it is public, and public is what lets
+# pull requests from forks pull the image at all.
 jobs:
   default:
     name: default options
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     container:
       image: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
-      # Needed while the GHCR package is private. Harmless once it is public,
-      # and public is what lets pull requests from forks pull it at all.
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -34,18 +31,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build
-      - run: ctest --test-dir build --output-on-failure -E "$FLAKY"
+      - run: ctest --test-dir build --output-on-failure -j "$(nproc)"
 
   full:
     name: all libraries + live services
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     container:
       image: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
-      # Needed while the GHCR package is private. Harmless once it is public,
-      # and public is what lets pull requests from forks pull it at all.
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -76,31 +68,26 @@ jobs:
               -DOWL_ENABLE_POSTGRESQL=ON \
               -DOWL_ENABLE_REDIS=ON
       - run: cmake --build build
-      - run: ctest --test-dir build --output-on-failure -E "$FLAKY"
+      - run: ctest --test-dir build --output-on-failure -j "$(nproc)"
 
   asan:
     name: asan + ubsan
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     container:
       image: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
-      # Needed while the GHCR package is private. Harmless once it is public,
-      # and public is what lets pull requests from forks pull it at all.
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - run: |
-          cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
               -DOWL_ENABLE_PROMETHEUS=ON \
               -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
-      - run: cmake --build build-asan
+      - run: cmake --build build
       # Hermetic tests only: the live-service tests skip themselves without
       # OWL_TEST_PSQL_DSN / OWL_TEST_REDIS, which is what we want here.
-      - run: ctest --test-dir build-asan --output-on-failure -E "$FLAKY"
+      - run: ctest --test-dir build --output-on-failure -j "$(nproc)"
         env:
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
 
@@ -109,6 +96,9 @@ jobs:
     # The one job that does not run in the dev image: docker compose needs a
     # Docker daemon, and a container job does not have one.
     runs-on: ubuntu-latest
+    env:
+      # Compose reads this, so every call below is a bare `docker compose`.
+      COMPOSE_FILE: examples/rest/docker-compose.yml:.github/compose.ci.yml
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -126,44 +116,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start the stack
-        run: |
-          docker compose \
-              -f examples/rest/docker-compose.yml \
-              -f .github/compose.ci.yml \
-              up -d --no-build
+        run: docker compose up -d --no-build
 
+      # Any HTTP response means the server is accepting connections; the route
+      # itself need not exist, and `curl -s` without -f exits 0 on 4xx/5xx.
+      # On timeout the step fails and the `Logs on failure` step below runs.
       - name: Wait for the API
-        run: |
-          for i in $(seq 1 60); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ || true)
-              # Any HTTP response means the server is accepting connections;
-              # the route itself need not exist.
-              if [ "$code" != "000" ]; then
-                  echo "up after ${i}s (HTTP $code)"
-                  exit 0
-              fi
-              sleep 1
-          done
-          echo "the rest example never answered"
-          docker compose -f examples/rest/docker-compose.yml logs
-          exit 1
+        run: timeout 60 bash -c 'until curl -s -o /dev/null http://localhost:8080/; do sleep 1; done'
 
-      # Phase 1 only. It holds the server to one rule -- it may refuse
-      # anything, it may not fail -- and is seeded, so a run is reproducible.
-      # Phase 2 (--compose) restarts postgres and redis under load; that is
-      # inherently timing-sensitive and belongs on a nightly, not on a
-      # required check.
+      # Phase 1 only: the chaos phase (--compose) restarts services under load
+      # and is too timing-sensitive for a required check. See monkey.py.
       - name: Monkey test
         run: python3 examples/rest/monkey.py http://localhost:8080 --seed 1
 
       - name: Logs on failure
         if: failure()
-        run: docker compose -f examples/rest/docker-compose.yml logs
+        run: docker compose logs
 
       - name: Tear down
         if: always()
-        run: |
-          docker compose \
-              -f examples/rest/docker-compose.yml \
-              -f .github/compose.ci.yml \
-              down -v
+        run: docker compose down -v
