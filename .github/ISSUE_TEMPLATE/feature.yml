@@ -1,0 +1,34 @@
+name: Feature or API proposal
+description: Suggest something owl should do, or a change to something it does
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Small additions can go straight to a pull request. Anything that
+        reshapes a public API is worth discussing first -- the layering rules
+        in CONTRIBUTING.md are load-bearing, and a wide patch is painful to
+        revise after the fact.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were trying to do, and where owl got in the way.
+    validations:
+      required: true
+
+  - type: textarea
+    id: sketch
+    attributes:
+      label: What it might look like
+      description: >
+        A sketch of the API, even a rough one. Handler signatures and route
+        declarations say more than prose here.
+      render: cpp
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What you tried instead, and why it did not fit.

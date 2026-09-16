@@ -1,0 +1,6 @@
+# Overlay for the e2e CI job. The rest service keeps its build: stanza from
+# the base file, but naming an image lets `up --no-build` use the one the
+# workflow already built with a warm layer cache instead of building again.
+services:
+  rest:
+    image: owl-rest:ci

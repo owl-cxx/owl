@@ -1,0 +1,58 @@
+name: Bug report
+description: Something compiles or behaves differently than documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        owl is experimental and APIs move between commits, so the commit you
+        built is the single most useful thing in this report.
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.
+      placeholder: 87541f7
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform and compiler
+      options:
+        - Linux / GCC 14
+        - Linux / other
+        - macOS / Apple clang
+        - macOS / other
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproducer
+      description: >
+        The smallest handler, route, or test that shows it. For a compile
+        error, include the full diagnostic -- C++23 template errors lose their
+        meaning when trimmed.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: options
+    attributes:
+      label: CMake options
+      description: Any OWL_ENABLE_* options you configured with.
+      placeholder: -DOWL_ENABLE_REDIS=ON -DOWL_ENABLE_POSTGRESQL=ON

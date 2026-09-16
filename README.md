@@ -14,7 +14,7 @@ Coroutine handlers stay on the event loop.
 [![Telegram](https://img.shields.io/badge/Telegram-owl__cxx-26A5E4?logo=telegram&logoColor=white)](https://t.me/owl_cxx)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/RxdpFxb65j)
 
-[Libraries](#libraries) · [Quick start](#quick-start) · [Stability](#stability) · [Install](#install) · [Contributing](#contributing)
+[Libraries](#libraries) · [Quick start](#quick-start) · [Stability](#stability) · [Install](#install) · [Roadmap](ROADMAP.md) · [Contributing](#contributing)
 
 </div>
 
@@ -159,7 +159,8 @@ revise after the fact.
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the build, the test suite, the
 layering and `detail/` rules, and the commit style. Issues tagged
 [good first issue](https://github.com/MrAdkhambek/owl/labels/good%20first%20issue)
-are self-contained and have a clear definition of done.
+are self-contained and have a clear definition of done. [ROADMAP.md](ROADMAP.md) has what is
+being worked on, what is next, and what is deliberately not planned.
 
 ## License
 

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Telegram
+    url: https://t.me/owl_cxx
+    about: Questions, ideas, and anything that is not yet a bug report.
+  - name: Discord
+    url: https://discord.gg/RxdpFxb65j
+    about: Same, in chat form.
+  - name: Contributing guide
+    url: https://github.com/MrAdkhambek/owl/blob/main/CONTRIBUTING.md
+    about: Build, tests, layering rules, and the commit style.

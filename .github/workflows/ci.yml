@@ -1,0 +1,142 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Known-flaky tests, excluded by name so that a red run means a real break.
+  # A permanently-red CI deters contribution more than no CI does.
+  #   test_when_any        -- intermittent, see the tracking issue
+  #   test_loop_scheduler  -- use-after-free at teardown, see the tracking issue
+  FLAKY: test_when_any|test_loop_scheduler
+
+jobs:
+  default:
+    name: default options
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure -E "$FLAKY"
+
+  full:
+    name: all libraries + live services
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: owl
+          POSTGRES_PASSWORD: owl
+          POSTGRES_DB: owl_test
+        options: >-
+          --health-cmd "pg_isready -U owl -d owl_test"
+          --health-interval 2s --health-timeout 2s --health-retries 15
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 2s --health-retries 15
+    env:
+      # Service containers are reachable by service name from a container job.
+      OWL_TEST_PSQL_DSN: postgres://owl:owl@postgres:5432/owl_test
+      OWL_TEST_REDIS: redis:6379
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+              -DOWL_ENABLE_PROMETHEUS=ON \
+              -DOWL_ENABLE_POSTGRESQL=ON \
+              -DOWL_ENABLE_REDIS=ON
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure -E "$FLAKY"
+
+  asan:
+    name: asan + ubsan
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+              -DOWL_ENABLE_PROMETHEUS=ON \
+              -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+      - run: cmake --build build-asan
+      # Hermetic tests only: the live-service tests skip themselves without
+      # OWL_TEST_PSQL_DSN / OWL_TEST_REDIS, which is what we want here.
+      - run: ctest --test-dir build-asan --output-on-failure -E "$FLAKY"
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
+  e2e:
+    name: end-to-end (rest example)
+    # The one job that does not run in the dev image: docker compose needs a
+    # Docker daemon, and a container job does not have one.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # examples/rest/Dockerfile installs dependencies and builds h2o before
+      # COPY . /src, so those layers restore from cache and only rebuild when
+      # the Dockerfile itself changes.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: examples/rest/Dockerfile
+          tags: owl-rest:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start the stack
+        run: |
+          docker compose \
+              -f examples/rest/docker-compose.yml \
+              -f .github/compose.ci.yml \
+              up -d --no-build
+
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ || true)
+              # Any HTTP response means the server is accepting connections;
+              # the route itself need not exist.
+              if [ "$code" != "000" ]; then
+                  echo "up after ${i}s (HTTP $code)"
+                  exit 0
+              fi
+              sleep 1
+          done
+          echo "the rest example never answered"
+          docker compose -f examples/rest/docker-compose.yml logs
+          exit 1
+
+      # Phase 1 only. It holds the server to one rule -- it may refuse
+      # anything, it may not fail -- and is seeded, so a run is reproducible.
+      # Phase 2 (--compose) restarts postgres and redis under load; that is
+      # inherently timing-sensitive and belongs on a nightly, not on a
+      # required check.
+      - name: Monkey test
+        run: python3 examples/rest/monkey.py http://localhost:8080 --seed 1
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f examples/rest/docker-compose.yml logs
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose \
+              -f examples/rest/docker-compose.yml \
+              -f .github/compose.ci.yml \
+              down -v

@@ -1,0 +1,120 @@
+name: dev image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/dev.Dockerfile
+      - .github/workflows/dev-image.yml
+  schedule:
+    # Mondays, 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build and push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read the pinned h2o commit
+        id: pin
+        run: |
+          sha=$(sed -n 's/^ARG H2O_REF=//p' docker/dev.Dockerfile)
+          if [ -z "$sha" ]; then
+              echo "no ARG H2O_REF in docker/dev.Dockerfile"
+              exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # The scheduled run rebuilds the same pin on purpose: it catches drift
+      # in the Ubuntu base image and apt packages underneath a fixed h2o.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/dev.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/owl-dev:latest
+            ghcr.io/${{ github.repository_owner }}/owl-dev:h2o-${{ steps.pin.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  h2o-drift:
+    name: report h2o divergence
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare the pin against h2o master
+        id: check
+        run: |
+          pinned=$(sed -n 's/^ARG H2O_REF=//p' docker/dev.Dockerfile)
+          head=$(git ls-remote https://github.com/h2o/h2o.git HEAD | cut -f1)
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          if [ "$pinned" = "$head" ]; then
+              echo "diverged=false" >> "$GITHUB_OUTPUT"
+          else
+              echo "diverged=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Divergence is reported, never enforced. Bumping the pin is a
+      # deliberate act, so this opens or updates one tracking issue and
+      # otherwise stays out of the way.
+      - name: Open or update the tracking issue
+        if: steps.check.outputs.diverged == 'true'
+        uses: actions/github-script@v7
+        env:
+          PINNED: ${{ steps.check.outputs.pinned }}
+          HEAD_SHA: ${{ steps.check.outputs.head }}
+        with:
+          script: |
+            const title = 'dev image: h2o pin is behind master';
+            const body = [
+              'The dev image pins h2o at a commit; master has moved past it.',
+              '',
+              `- pinned: \`${process.env.PINNED}\``,
+              `- master: \`${process.env.HEAD_SHA}\``,
+              '',
+              'Bump `ARG H2O_REF` in `docker/dev.Dockerfile` when it suits.',
+              'CI is unaffected until then -- the pin is what gets built.',
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dev-image',
+            });
+            const found = existing.data.find(i => i.title === title);
+
+            if (found) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: found.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['dev-image'],
+              });
+            }
