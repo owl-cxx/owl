@@ -61,3 +61,7 @@ Prefer `view()` over writing `data`. `data` is public only because structural NT
 `N` includes the trailing NUL; `size()` / `view()` are `N-1`. The type is `fstr::fstr<N>` (namespace == type), not `fixed_string`.
 
 Rejections that fail because of `consteval` (runtime buffer, concatenation, embedded NUL) live in `tests/compile_fail/`. Those TUs are `EXCLUDE_FROM_ALL`; ctest builds them with `WILL_FAIL TRUE`.
+
+---
+
+Part of [owl](../README.md). MIT licensed — see [LICENSE](../LICENSE) and [CONTRIBUTING.md](../CONTRIBUTING.md).

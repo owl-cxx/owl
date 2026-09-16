@@ -319,3 +319,7 @@ if (m.try_lock()) {
 ```
 
 Waiters acquire FIFO. Uncontended acquire never suspends. `unlock()` resumes the next waiter **inline**, on the unlocking thread -- as a loop, not a recursion: a queue of waiters that each release before suspending again is drained in one `unlock()` call with constant stack, however long the queue. Neither copyable nor movable.
+
+---
+
+Part of [owl](../README.md). MIT licensed — see [LICENSE](../LICENSE) and [CONTRIBUTING.md](../CONTRIBUTING.md).

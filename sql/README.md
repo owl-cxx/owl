@@ -171,3 +171,7 @@ brew services start postgresql@17
 /opt/homebrew/opt/postgresql@17/bin/createdb owl_test
 OWL_TEST_PSQL_DSN=postgres://localhost/owl_test ctest --test-dir cmake-build-debug -R sql_ --output-on-failure
 ```
+
+---
+
+Part of [owl](../README.md). MIT licensed — see [LICENSE](../LICENSE) and [CONTRIBUTING.md](../CONTRIBUTING.md).

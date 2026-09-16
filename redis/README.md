@@ -201,3 +201,7 @@ server:
 brew services start redis
 OWL_TEST_REDIS=127.0.0.1:6379 ctest --test-dir cmake-build-redis -R redis_ --output-on-failure
 ```
+
+---
+
+Part of [owl](../README.md). MIT licensed — see [LICENSE](../LICENSE) and [CONTRIBUTING.md](../CONTRIBUTING.md).

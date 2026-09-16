@@ -2,21 +2,25 @@
 
 # owl
 
-**Header-only C++23 libraries**
+**Header-only C++23 HTTP framework on libh2o**
 
-A libh2o web framework, a coroutine toolkit, and strings that can be template
-arguments. Nothing here is production-ready.
+Routes and extractors are checked at compile time.<br>
+Coroutine handlers stay on the event loop.
 
 [![C++](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-4.3-064F8C?logo=cmake&logoColor=white)](#install)
 [![header-only](https://img.shields.io/badge/header--only-yes-success)](#)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Telegram](https://img.shields.io/badge/Telegram-owl__cxx-26A5E4?logo=telegram&logoColor=white)](https://t.me/owl_cxx)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/RxdpFxb65j)
 
-[Libraries](#libraries) · [Quick start](#quick-start) · [Install](#install)
+[Libraries](#libraries) · [Quick start](#quick-start) · [Stability](#stability) · [Install](#install) · [Contributing](#contributing)
 
 </div>
 
-> [!WARNING]
-> Experimental. APIs move. Do not ship this.
+**Status:** early — APIs will move. **License:** MIT. **Build:** see [Install](#install).
+**Want to help:** see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[good first issue](https://github.com/MrAdkhambek/owl/labels/good%20first%20issue) label.
 
 ```cpp
 #include <owl/owl.h>
@@ -86,6 +90,12 @@ State is bound on `Server<App>` via `build_with`. `Router<App>` and `Server<App>
 
 A small REST API -- register, login, posts on postgres, sessions on redis -- lives in [`examples/rest`](examples/rest/README.md), a standalone CMake project that consumes owl the way an application does, with a Dockerfile, a compose file, and a monkey test. WebSocket echo, rooms, and a shared chat page live in [`examples/ws`](examples/ws/README.md).
 
+## Stability
+
+Experimental. APIs move between commits, there are no tagged releases, and none
+of this has run in production. Do not ship this. If you depend on it anyway,
+pin a commit.
+
 ## Install
 
 CMake **4.3**, C++23.
@@ -137,3 +147,20 @@ A custom prefix needs `CMAKE_PREFIX_PATH`.
 | sqlite3 | `find_package(SQLite3)`, on by default (`-DOWL_ENABLE_SQLITE=OFF` drops it); on macOS, `brew install sqlite` |
 
 `owl::coro` needs Threads. `owl::fstr` needs nothing.
+
+## Contributing
+
+Tests, bug reports, documentation and portability fixes are always welcome.
+Larger API changes are best raised first in an issue or in
+[Telegram](https://t.me/owl_cxx) / [Discord](https://discord.gg/RxdpFxb65j),
+because the layering rules are load-bearing and a wide patch is painful to
+revise after the fact.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the build, the test suite, the
+layering and `detail/` rules, and the commit style. Issues tagged
+[good first issue](https://github.com/MrAdkhambek/owl/labels/good%20first%20issue)
+are self-contained and have a clear definition of done.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

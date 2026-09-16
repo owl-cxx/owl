@@ -129,3 +129,7 @@ Import `postman/owl-rest.postman_collection.json`. Run the requests top to
 bottom: **Login** stores the token in the collection variable `token`,
 **Create post** stores `postId`, and each request carries a test for its
 expected status.
+
+---
+
+Part of [owl](../../README.md). MIT licensed — see [LICENSE](../../LICENSE) and [CONTRIBUTING.md](../../CONTRIBUTING.md).

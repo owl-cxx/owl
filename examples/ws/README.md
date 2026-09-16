@@ -23,3 +23,7 @@ websocat ws://127.0.0.1:8080/rooms/1
 
 Bind knobs are `owl::Config::make` (CLI > `OWL_*` env > defaults): `--address` /
 `--port` / `--threads` / `--backlog`. See [`owl/README.md`](../../owl/README.md#server).
+
+---
+
+Part of [owl](../../README.md). MIT licensed — see [LICENSE](../../LICENSE) and [CONTRIBUTING.md](../../CONTRIBUTING.md).

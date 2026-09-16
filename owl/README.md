@@ -321,3 +321,7 @@ Not started. Each item should sit on `coro` + the event loop the way handlers al
 | **Static files**      | Route that sendfiles a directory. Range requests later.                               |
 | **TLS**               | HTTPS as a `Server::Builder` switch; h2o already links OpenSSL.                       |
 | **Graceful shutdown** | Stop listeners, drain in-flight handlers, then join workers.                          |
+
+---
+
+Part of [owl](../README.md). MIT licensed — see [LICENSE](../LICENSE) and [CONTRIBUTING.md](../CONTRIBUTING.md).

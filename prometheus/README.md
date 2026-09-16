@@ -105,3 +105,7 @@ to report, and a fabricated zero sample would pull percentiles down.
 | `prometheus/prometheus.h` | umbrella |
 | `prometheus/registry.h` | counter / gauge / histogram, clear |
 | `prometheus/http.h` | `record_request`, `record_unmatched`, `dump` |
+
+---
+
+Part of [owl](../README.md). MIT licensed — see [LICENSE](../LICENSE) and [CONTRIBUTING.md](../CONTRIBUTING.md).
