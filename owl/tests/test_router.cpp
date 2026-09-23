@@ -93,6 +93,14 @@ namespace {
         return owl::Response::ok(std::string{id.value});
     }
 
+    owl::Response session(owl::CookieView<"sid"> sid) {
+        return owl::Response::ok(std::string{sid.value});
+    }
+
+    owl::Response doubled(owl::Cookie<"n", int> n) {
+        return owl::Response::ok(std::to_string(n.value * 2));
+    }
+
     coro::task<owl::Response> pass_through(const owl::Request& req, owl::Next<AppState> next) {
         co_return co_await next(req);
     }
@@ -269,4 +277,38 @@ TEST(Router, LayerCollectsChain) {
     ASSERT_NE(router.match(owl::Method::Get, "/ping", *request, &chains), nullptr);
     EXPECT_EQ(chains.count, 1u);
     h2o_mem_clear_pool(&req.pool);
+}
+
+TEST(Router, CookieViewReadsAcrossCookieFields) {
+    auto router = owl::Router<AppState>::make().route<"/me">(owl::get(session));
+    Answered a;
+    h2o_add_header_by_str(&a.req.pool, &a.req.headers, "cookie", 6, 1, nullptr, "theme=dark", 10);
+    h2o_add_header_by_str(&a.req.pool, &a.req.headers, "cookie", 6, 1, nullptr, "sid=abc", 7);
+    a.run(router, owl::Method::Get, "/me");
+    EXPECT_EQ(a.req.res.status, 200);
+    EXPECT_EQ(a.capture.body, "abc");
+}
+
+TEST(Router, MissingCookieIs400) {
+    auto router = owl::Router<AppState>::make().route<"/me">(owl::get(session));
+    Answered a;
+    a.run(router, owl::Method::Get, "/me");
+    EXPECT_EQ(a.req.res.status, 400);
+}
+
+TEST(Router, CookieParsesIntoItsType) {
+    auto router = owl::Router<AppState>::make().route<"/n">(owl::get(doubled));
+    Answered a;
+    h2o_add_header_by_str(&a.req.pool, &a.req.headers, "cookie", 6, 1, nullptr, "n=21", 4);
+    a.run(router, owl::Method::Get, "/n");
+    EXPECT_EQ(a.req.res.status, 200);
+    EXPECT_EQ(a.capture.body, "42");
+}
+
+TEST(Router, MalformedTypedCookieIs400) {
+    auto router = owl::Router<AppState>::make().route<"/n">(owl::get(doubled));
+    Answered a;
+    h2o_add_header_by_str(&a.req.pool, &a.req.headers, "cookie", 6, 1, nullptr, "n=x", 3);
+    a.run(router, owl::Method::Get, "/n");
+    EXPECT_EQ(a.req.res.status, 400);
 }

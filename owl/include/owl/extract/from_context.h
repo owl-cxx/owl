@@ -128,6 +128,28 @@ namespace owl {
         }
     };
 
+    // Same two failures as Header, same 400: a cookie is request metadata
+    // the client controls.
+    template <fstr::fstr Pattern, Parseable T>
+    struct FromContext<Cookie<Pattern, T>> {
+        using TargetType = Cookie<Pattern, T>;
+
+        template <typename S>
+        std::expected<TargetType, KickToken> operator()(const Context<S>&, const Request& req) const {
+            return detail::lift_parsed<TargetType>(req.cookie(TargetType::name), &KickToken::bad_request, "cookie");
+        }
+    };
+
+    template <fstr::fstr Pattern>
+    struct FromContext<CookieView<Pattern>> {
+        using TargetType = CookieView<Pattern>;
+
+        template <typename S>
+        std::expected<TargetType, KickToken> operator()(const Context<S>&, const Request& req) const {
+            return detail::lift(TargetType::extract(req), &KickToken::bad_request, "cookie");
+        }
+    };
+
     // Three distinct failures, checked in order: the body is not declared
     // JSON (415 -- the client misdescribed it), it does not parse (400),
     // or, when T is a concrete type, it parses but does not fit T (422 --

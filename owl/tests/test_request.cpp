@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <format>
 #include <gtest/gtest.h>
+#include <initializer_list>
 #include <optional>
 #include <stop_token>
 #include <string>
@@ -239,4 +240,75 @@ TEST(Request, FormatsAsMethodAndPath) {
         EXPECT_EQ(std::format("{:>20}", *r), "       GET /users/42");
     }
     h2o_mem_clear_pool(&req.pool);
+}
+
+namespace {
+    struct WithCookies final {
+        h2o_req_t req{};
+        char path[2] = "/";
+
+        explicit WithCookies(const std::initializer_list<std::string_view> fields) {
+            h2o_mem_init_pool(&req.pool);
+            for (const auto field : fields) {
+                h2o_add_header_by_str(&req.pool, &req.headers, "cookie", 6, 1, nullptr, field.data(), field.size());
+            }
+        }
+
+        ~WithCookies() { h2o_mem_clear_pool(&req.pool); }
+
+        [[nodiscard]] std::optional<std::string_view> cookie(const std::string_view name) {
+            return make_request(req, "GET", path, 1, SIZE_MAX)->cookie(name);
+        }
+    };
+}
+
+TEST(Request, CookieFindsEachPairInOneField) {
+    WithCookies r{"a=1; b=2"};
+    EXPECT_EQ(r.cookie("a"), "1");
+    EXPECT_EQ(r.cookie("b"), "2");
+}
+
+TEST(Request, CookieSearchesEveryField) {
+    WithCookies r{"a=1", "b=2"};
+    EXPECT_EQ(r.cookie("b"), "2");
+}
+
+TEST(Request, CookieFirstFieldWins) {
+    WithCookies r{"a=1", "a=2"};
+    EXPECT_EQ(r.cookie("a"), "1");
+}
+
+TEST(Request, CookieMissingIsNullopt) {
+    WithCookies some{"a=1"};
+    EXPECT_EQ(some.cookie("c"), std::nullopt);
+    WithCookies none{};
+    EXPECT_EQ(none.cookie("a"), std::nullopt);
+}
+
+TEST(Request, CookieNameIsCaseSensitive) {
+    WithCookies r{"SID=x"};
+    EXPECT_EQ(r.cookie("sid"), std::nullopt);
+}
+
+TEST(Request, CookieToleratesLooseSpacing) {
+    WithCookies r{"a=1 ;b=2;  c=3\t"};
+    EXPECT_EQ(r.cookie("b"), "2");
+    EXPECT_EQ(r.cookie("c"), "3");
+}
+
+TEST(Request, CookieEmptyValueIsEmptyNotMissing) {
+    WithCookies r{"a="};
+    ASSERT_TRUE(r.cookie("a").has_value());
+    EXPECT_EQ(*r.cookie("a"), "");
+}
+
+TEST(Request, CookieValueKeepsLaterEqualsSigns) {
+    WithCookies r{"t=x=y"};
+    EXPECT_EQ(r.cookie("t"), "x=y");
+}
+
+TEST(Request, CookieCrumbWithoutEqualsIsSkipped) {
+    WithCookies r{"junk; a=1"};
+    EXPECT_EQ(r.cookie("a"), "1");
+    EXPECT_EQ(r.cookie("junk"), std::nullopt);
 }

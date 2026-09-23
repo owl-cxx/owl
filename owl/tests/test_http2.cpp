@@ -41,6 +41,10 @@ namespace {
         while (auto msg = co_await sock.recv()) co_await sock.send(std::string{msg->data()}, msg->opcode());
     }
 
+    owl::Response crumbs(owl::CookieView<"a"> a, owl::CookieView<"b"> b) {
+        return owl::Response::ok(std::format("{}|{}", a.value, b.value));
+    }
+
     // HPACK integers (RFC 7541 §5.1) and strings (§5.2, never Huffman):
     // enough to send a request. Responses go through h2o's own decoder.
     void put_int(std::string& out, const unsigned prefix_bits, std::uint32_t value, const std::uint8_t flags) {
@@ -339,4 +343,20 @@ TEST(Http2, ExtendedConnectToAWebSocketRouteIs404) {
     client.preface();
     client.connect_websocket(1, "/ws");
     EXPECT_EQ(client.answer(1).status, 404);
+}
+
+// RFC 9113 §8.2.3: an HTTP/2 client may send the cookie string as several
+// `cookie` fields, and Chromium does. h2o passes them through unmerged.
+TEST(Http2, SplitCookieFieldsAreOneCookieString) {
+    auto router = owl::Router<AppState>::make().route<"/crumbs">(owl::get(crumbs));
+    LiveWorker worker{router};
+    Client client{worker.port};
+    client.preface();
+    std::string extra;
+    put_literal(extra, idx_cookie, "a=1");
+    put_literal(extra, idx_cookie, "b=2");
+    client.get(1, "/crumbs", extra);
+    const auto answer = client.answer(1);
+    EXPECT_EQ(answer.status, 200);
+    EXPECT_EQ(answer.body, "1|2");
 }

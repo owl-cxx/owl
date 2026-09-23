@@ -71,6 +71,7 @@ owl::Response login(owl::RequestView) {
 | `PathView<"n">` / `Path<"n", T>`     | path segment                                                       | 404                 |
 | `QueryView<"q">` / `Query<"q", T>`   | query string                                                       | 400                 |
 | `HeaderView<"h">` / `Header<"h", T>` | header                                                             | 400                 |
+| `CookieView<"c">` / `Cookie<"c", T>` | cookie, searched across every `cookie` field                       | 400                 |
 | `BodyView`                           | raw body                                                           | —                   |
 | `Json<T>`                            | JSON body                                                          | 415 / 400 / 422     |
 | `State<T>`                           | router state                                                       | 500                 |
@@ -78,6 +79,8 @@ owl::Response login(owl::RequestView) {
 | `const sql::pool<sql::psql>&`        | the worker's postgres pool (`-DOWL_ENABLE_POSTGRESQL=ON`)          | 500                 |
 | `const sql::pool<sql::sqlite>&`      | the worker's sqlite pool (on by default)                           | 500                 |
 | `const redis::client&`               | the worker's Redis client (`-DOWL_ENABLE_REDIS=ON`)                | 500                 |
+
+Cookie names are case-sensitive. The lookup walks every `cookie` field because an HTTP/2 client may split the cookie string into several (RFC 9113 §8.2.3), and `Request::cookie(name)` is the same lookup for a custom extractor. `owl::cookie`, lower-case, is the `Set-Cookie` side.
 
 A custom extractor is one `FromContext` specialization — the built-ins in `extract/from_context.h` are the same protocol, and make good reference. The parameter type is the value the handler receives; the specialization answers either that value or a `KickToken`, which carries any status, so `401` needs no special support:
 

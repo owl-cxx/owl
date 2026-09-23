@@ -62,6 +62,30 @@ namespace owl {
             return std::string_view{entry->value.base, entry->value.len};
         }
 
+        // The named cookie's value, searched across every `cookie` field.
+        // HTTP/2 lets a client split the cookie string into separate fields
+        // (RFC 9113 §8.2.3), Chromium does, and h2o hands them over as sent,
+        // so a first-field lookup would lose every crumb after the first.
+        // Names are case-sensitive, as cookie names are. The value is the
+        // raw text after `=`, quotes and all: a session token is opaque.
+        [[nodiscard]] std::optional<std::string_view> cookie(const std::string_view name) const {
+            if (!req_ || !req_->headers.entries) return std::nullopt;
+            for (const auto& entry : std::span<const h2o_header_t>{req_->headers.entries, req_->headers.size}) {
+                if (!util::eq_ci(std::string_view{entry.name->base, entry.name->len}, "cookie")) continue;
+                std::string_view rest{entry.value.base, entry.value.len};
+                while (!rest.empty()) {
+                    const auto semi = rest.find(';');
+                    auto pair = rest.substr(0, semi);
+                    rest = semi == std::string_view::npos ? std::string_view{} : rest.substr(semi + 1);
+                    while (!pair.empty() && (pair.front() == ' ' || pair.front() == '\t')) pair.remove_prefix(1);
+                    while (!pair.empty() && (pair.back() == ' ' || pair.back() == '\t')) pair.remove_suffix(1);
+                    const auto eq = pair.find('=');
+                    if (eq != std::string_view::npos && pair.substr(0, eq) == name) return pair.substr(eq + 1);
+                }
+            }
+            return std::nullopt;
+        }
+
         [[nodiscard]] std::optional<std::string_view> query(const std::string_view name) const {
             if (const auto it = queries_.find(name); it != queries_.end()) {
                 return it->second;

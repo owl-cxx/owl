@@ -85,6 +85,43 @@ namespace owl {
         }
     };
 
+    // A request cookie parsed into T:
+    //
+    //     Cookie<"uid", std::uint64_t> uid;
+    //
+    // Looked up across every `cookie` field, since an HTTP/2 client may
+    // split the cookie string (RFC 9113 §8.2.3); names are case-sensitive.
+    // Same shape as Header, and for the same reason no extract(): missing
+    // and unparseable are kept apart by FromContext. `owl::cookie`,
+    // lower-case, is the Set-Cookie side.
+    template <fstr::fstr Pattern, Parseable T = std::string>
+    struct Cookie {
+        // The cookie name as written in the pattern, for error messages.
+        static constexpr std::string_view name = Pattern.view();
+        T value{};
+
+        explicit Cookie(T value) : value(std::move(value)) {
+        }
+    };
+
+    // A request cookie left as text. The view points into the request's
+    // header table, which outlives the handler.
+    template <fstr::fstr Pattern>
+    struct CookieView {
+        static constexpr std::string_view name = Pattern.view();
+        std::string_view value;
+
+        explicit CookieView(const std::string_view value) noexcept : value(value) {
+        }
+
+        [[nodiscard]] static std::optional<CookieView>
+        extract(const Request& req) noexcept {
+            return req.cookie(name).transform([](const auto& val) noexcept {
+                return CookieView{val};
+            });
+        }
+    };
+
     // The request body decoded as JSON. The default is the raw nlohmann
     // tree; a concrete T is converted out of it, and it is the conversion
     // -- not the parse -- that reports 422, because a body that parses but
