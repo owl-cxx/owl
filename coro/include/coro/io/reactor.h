@@ -37,6 +37,7 @@
 #include <unistd.h>
 #elif defined(__linux__)
 #define CORO_REACTOR_EPOLL 1
+#include <fcntl.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
@@ -68,6 +69,14 @@ namespace coro {
             // epoll has no native timer, so each timed request carries
             // its own timerfd (created on arm, closed on disarm).
             int timer_fd = -1;
+            // What this request itself registered with epoll, -1 for
+            // nothing. epoll keys a registration by descriptor alone,
+            // where kqueue keys it by descriptor and direction, so the
+            // second direction on an fd cannot be added beside the
+            // first. It registers a dup instead -- the same open file,
+            // so the same readiness, under a number of its own -- and
+            // each request then takes down only what it put up.
+            int watched_fd = -1;
 #endif
         };
 
@@ -265,7 +274,14 @@ namespace coro {
                 }
                 static_cast<void>(apply(ev, n));
 #elif CORO_REACTOR_EPOLL
-                if (req->fd >= 0) ::epoll_ctl(epfd, EPOLL_CTL_DEL, req->fd, nullptr);
+                // Never req->fd by number: a request whose registration
+                // was refused owns none, and the fd's entry then belongs
+                // to the other direction's request.
+                if (req->watched_fd >= 0) {
+                    ::epoll_ctl(epfd, EPOLL_CTL_DEL, req->watched_fd, nullptr);
+                    if (req->watched_fd != req->fd) ::close(req->watched_fd);
+                    req->watched_fd = -1;
+                }
                 if (req->timer_fd >= 0) {
                     ::epoll_ctl(epfd, EPOLL_CTL_DEL, req->timer_fd, nullptr);
                     ::close(req->timer_fd);
@@ -280,8 +296,8 @@ namespace coro {
             // of reference counting.
             //
             // False when the kernel refused any of it -- a closed fd
-            // (EBADF), an fd that already carries this direction on
-            // epoll (EEXIST), no timerfd to be had. The caller turns
+            // (EBADF), no descriptor left for epoll's dup or its
+            // timerfd. The caller turns
             // that into wait_status::error; ignoring it would leave the
             // request in `inflight` with nothing armed to ever complete
             // it, parked for good.
@@ -303,14 +319,25 @@ namespace coro {
                 }
                 return apply(ev, n);
 #elif CORO_REACTOR_EPOLL
-                bool ok = true;
                 if (req->fd >= 0) {
                     epoll_event ev{};
                     ev.events = EPOLLET | EPOLLONESHOT;
                     if (req->want != interest::write) ev.events |= EPOLLIN;
                     if (req->want != interest::read) ev.events |= EPOLLOUT;
                     ev.data.ptr = req;
-                    ok = ::epoll_ctl(epfd, EPOLL_CTL_ADD, req->fd, &ev) == 0;
+                    if (::epoll_ctl(epfd, EPOLL_CTL_ADD, req->fd, &ev) == 0) {
+                        req->watched_fd = req->fd;
+                    } else if (errno == EEXIST) {
+                        const int alias = ::fcntl(req->fd, F_DUPFD_CLOEXEC, 0);
+                        if (alias < 0) return false;
+                        if (::epoll_ctl(epfd, EPOLL_CTL_ADD, alias, &ev) != 0) {
+                            ::close(alias);
+                            return false;
+                        }
+                        req->watched_fd = alias;
+                    } else {
+                        return false;
+                    }
                 }
                 if (req->timeout.count() >= 0) {
                     req->timer_fd = ::timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
@@ -329,7 +356,7 @@ namespace coro {
                     ev.data.ptr = req;
                     if (::epoll_ctl(epfd, EPOLL_CTL_ADD, req->timer_fd, &ev) != 0) return false;
                 }
-                return ok;
+                return true;
 #endif
             }
 
