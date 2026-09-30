@@ -57,7 +57,9 @@ namespace {
 
         ~Fixture() {
             h2o_mem_clear_pool(&req.pool);
+            h2o_loop_t* const loop = ctx.loop;
             h2o_context_dispose(&ctx);
+            h2o_evloop_destroy(loop);
             h2o_config_dispose(&globalconf);
         }
     };
@@ -111,7 +113,9 @@ namespace {
 
         ~Wired() {
             h2o_mem_clear_pool(&req.pool);
+            h2o_loop_t* const loop = ctx.loop;
             h2o_context_dispose(&ctx);
+            h2o_evloop_destroy(loop);
             h2o_config_dispose(&globalconf);
         }
 
