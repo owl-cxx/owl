@@ -25,6 +25,8 @@
 #include <owl/detail.h>
 #include <owl/routing/router.h>
 
+#include "h2o_thread.h"
+
 namespace owl_test {
     [[nodiscard]] inline int listen_loopback() {
         const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -69,6 +71,7 @@ namespace owl_test {
             for (const auto& worker : workers) {
                 pumps.emplace_back([this, loop = worker->ctx.loop] {
                     while (!stop.load()) h2o_evloop_run(loop, 5);
+                    release_h2o_thread_caches();
                 });
             }
         }

@@ -13,6 +13,8 @@
 #include <owl/coro/loop_scheduler.h>
 #include <owl/routing/router.h>
 
+#include "support/h2o_thread.h"
+
 namespace {
     struct Capture final {
         h2o_ostream_t super{};
@@ -179,6 +181,7 @@ TEST(Middleware, ExtractsWiredLoopScheduler) {
     std::atomic<bool> stop{false};
     std::thread pump{[&] {
         while (!stop.load(std::memory_order_relaxed)) h2o_evloop_run(loop_ctx.loop, 5);
+        owl_test::release_h2o_thread_caches();
     }};
     fixture.send(run_chain(router, fixture, "/ping", ctx));
     stop.store(true, std::memory_order_relaxed);
@@ -218,6 +221,7 @@ TEST(Middleware, ExtractsLoopSchedulerByReference) {
     std::atomic<bool> stop{false};
     std::thread pump{[&] {
         while (!stop.load(std::memory_order_relaxed)) h2o_evloop_run(loop_ctx.loop, 5);
+        owl_test::release_h2o_thread_caches();
     }};
     fixture.send(run_chain(router, fixture, "/ping", ctx));
     stop.store(true, std::memory_order_relaxed);

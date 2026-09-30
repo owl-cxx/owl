@@ -22,6 +22,7 @@
 #include <owl/extract/from_context.h>
 #include <owl/server.h>
 
+#include "support/h2o_thread.h"
 #include "support/temp_db.h"
 
 namespace {
@@ -114,6 +115,7 @@ namespace {
             std::thread loop_thread([&] {
                 loop_id = std::this_thread::get_id();
                 while (!finished.load()) h2o_evloop_run(ctx.loop, 5);
+                owl_test::release_h2o_thread_caches();
             });
             coro::sync_wait([&]() -> coro::task<> {
                 co_await context().loop.schedule();
