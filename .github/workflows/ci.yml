@@ -80,10 +80,15 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      # UBSan's three null checks are off. Any one of them makes GCC stop
+      # assuming an object's address is non-null, and then the address of a
+      # template's static member is no constant expression: sql's per-query
+      # statement key and its placeholder scan no longer compile. ASan still
+      # traps a null dereference.
       - run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
               -DOWL_ENABLE_PROMETHEUS=ON \
-              -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+              -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize=null,nonnull-attribute,returns-nonnull-attribute -fno-omit-frame-pointer -g"
       - run: cmake --build build
       # Hermetic tests only: the live-service tests skip themselves without
       # OWL_TEST_PSQL_DSN / OWL_TEST_REDIS, which is what we want here.
