@@ -109,8 +109,17 @@ namespace coro {
                 if (epfd < 0) throw std::system_error(errno, std::generic_category(), "epoll_create1");
                 wake_fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
                 if (wake_fd < 0) throw std::system_error(errno, std::generic_category(), "eventfd");
+                // Edge-triggered, as kqueue's EV_CLEAR user event is. A
+                // level-triggered eventfd stays at the head of epoll's
+                // ready list after each wake, and run() takes one event
+                // per pass: a later wake was then reported ahead of a
+                // descriptor that had turned ready before it, so a cancel
+                // overtook the readiness it should have lost to. No wake
+                // is lost to the edge: every writer queues its work under
+                // the mutex before it writes, and run() rereads the queues
+                // after each wake.
                 epoll_event ev{};
-                ev.events = EPOLLIN;
+                ev.events = EPOLLIN | EPOLLET;
                 ev.data.ptr = nullptr;
                 ::epoll_ctl(epfd, EPOLL_CTL_ADD, wake_fd, &ev);
 #endif
