@@ -70,6 +70,21 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(H2O REQUIRED IMPORTED_TARGET libh2o-evloop)
 pkg_check_modules(WSLAY REQUIRED IMPORTED_TARGET libwslay)
 
+# libh2o-evloop is a static archive and its .pc names nothing it needs, so
+# PkgConfig::H2O carries the archive as a bare path with no dependencies and
+# CMake is free to put OpenSSL ahead of it. GNU ld reads the line once and
+# then cannot resolve h2o's SSL symbols; Apple's ld searches every library,
+# which is why only Linux failed. An imported library for the same archive
+# can carry the edge, and then the order holds however a consumer lists them.
+# libm is for h2o's bundled quicly: a C++ link gets it through libstdc++, the
+# C bench below does not, and macOS keeps it in libSystem.
+add_library(owl_h2o_archive UNKNOWN IMPORTED)
+set_target_properties(owl_h2o_archive PROPERTIES IMPORTED_LOCATION "${H2O_LINK_LIBRARIES}")
+target_link_libraries(owl_h2o_archive INTERFACE
+        OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB $<$<NOT:$<PLATFORM_ID:Darwin>>:m>)
+# Set, not appended: the bare path goes, or Apple's ld warns of a duplicate.
+set_property(TARGET PkgConfig::H2O PROPERTY INTERFACE_LINK_LIBRARIES owl_h2o_archive)
+
 include(FetchContent)
 FetchContent_Declare(
         nlohmann_json
