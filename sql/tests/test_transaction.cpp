@@ -172,7 +172,8 @@ TEST(Transaction, VoidBody) {
     fixture fx;
     drive([&]() -> coro::task<> {
         const auto r = co_await sql::transaction(fx.pool, [](auto tx) -> coro::task<std::expected<void, sql::error>> {
-            co_return (co_await sql::try_execute<"DELETE FROM t">(tx)).transform([](auto) {});
+            const auto done = co_await sql::try_execute<"DELETE FROM t">(tx);
+            co_return done.transform([](auto) {});
         });
         EXPECT_TRUE(r.has_value());
         EXPECT_EQ(fx.s.log, (std::vector<std::string>{"BEGIN", "DELETE FROM t", "COMMIT"}));
