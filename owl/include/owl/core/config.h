@@ -21,6 +21,15 @@
 #endif
 
 namespace owl {
+    // A certificate and its key, as files: what an ACME client, a secrets
+    // mount, or openssl itself leaves behind. `cert` is PEM with the leaf
+    // first and its chain after it; `key` is that leaf's PEM private key,
+    // without a passphrase -- nobody is at a server's terminal to type one.
+    struct Tls final {
+        std::string cert;
+        std::string key;
+    };
+
     // Bind/listen knobs plus optional drivers. Aggregate so
     // Server::builder().config({.port = 0, .sqlite = {{.path = p}}}) stays a
     // designated init; make() is the only parser, not a second type.
@@ -29,6 +38,10 @@ namespace owl {
         std::uint16_t port = 8080;
         int backlog = 1024;
         unsigned threads = 1;
+
+        // Set, the listener speaks TLS and nothing else; unset, cleartext.
+        // One port is never both: a client cannot be told which to expect.
+        std::optional<Tls> tls;
 
         // Unset means the extractor kicks 500 rather than opening a
         // default DSN the process never asked for.
@@ -51,6 +64,8 @@ namespace owl {
             if (const char* const v = std::getenv("OWL_PORT")) set_port(config, v);
             if (const char* const v = std::getenv("OWL_THREADS")) set_threads(config, v);
             if (const char* const v = std::getenv("OWL_BACKLOG")) set_backlog(config, v);
+            if (const char* const v = std::getenv("OWL_TLS_CERT")) set_tls_cert(config, v);
+            if (const char* const v = std::getenv("OWL_TLS_KEY")) set_tls_key(config, v);
 #ifdef OWL_ENABLE_POSTGRESQL
             if (const char* const v = std::getenv("OWL_PG")) set_pg(config, v);
 #endif
@@ -61,6 +76,11 @@ namespace owl {
             if (const char* const v = std::getenv("OWL_REDIS")) set_redis(config, v);
 #endif
             apply_cli(config, argc, argv);
+            // Checked once both sources are in, so the pair may span them: a
+            // certificate path from the environment, its key from a flag.
+            if (config.tls && (config.tls->cert.empty() || config.tls->key.empty())) {
+                throw std::invalid_argument("owl::Config: tls needs both a certificate and a key");
+            }
             return config;
         }
 
@@ -95,6 +115,18 @@ namespace owl {
 
         static void set_backlog(Config& config, const std::string_view v) {
             config.backlog = parse_int<int>(v, "backlog");
+        }
+
+        static void set_tls_cert(Config& config, const std::string_view v) {
+            if (v.empty()) throw std::invalid_argument("owl::Config: empty tls certificate");
+            if (!config.tls) config.tls.emplace();
+            config.tls->cert = std::string{v};
+        }
+
+        static void set_tls_key(Config& config, const std::string_view v) {
+            if (v.empty()) throw std::invalid_argument("owl::Config: empty tls key");
+            if (!config.tls) config.tls.emplace();
+            config.tls->key = std::string{v};
         }
 
 #ifdef OWL_ENABLE_POSTGRESQL
@@ -146,6 +178,10 @@ namespace owl {
                     set_threads(config, require_value(argc, argv, i, arg));
                 } else if (arg == "-b" || arg == "--backlog") {
                     set_backlog(config, require_value(argc, argv, i, arg));
+                } else if (arg == "--tls-cert") {
+                    set_tls_cert(config, require_value(argc, argv, i, arg));
+                } else if (arg == "--tls-key") {
+                    set_tls_key(config, require_value(argc, argv, i, arg));
 #ifdef OWL_ENABLE_POSTGRESQL
                 } else if (arg == "--pg") {
                     set_pg(config, require_value(argc, argv, i, arg));

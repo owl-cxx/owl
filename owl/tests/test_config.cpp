@@ -12,7 +12,7 @@
 namespace {
     constexpr const char* kVars[] = {
         "OWL_ADDRESS", "OWL_PORT", "OWL_THREADS", "OWL_BACKLOG",
-        "OWL_PG", "OWL_SQLITE", "OWL_REDIS",
+        "OWL_PG", "OWL_SQLITE", "OWL_REDIS", "OWL_TLS_CERT", "OWL_TLS_KEY",
     };
 
     struct EnvIsolated : ::testing::Test {
@@ -57,6 +57,7 @@ TEST_F(EnvIsolated, DefaultsWhenArgvIsOnlyTheProgram) {
     EXPECT_EQ(c.port, 8080);
     EXPECT_EQ(c.backlog, 1024);
     EXPECT_EQ(c.threads, 1u);
+    EXPECT_FALSE(c.tls);
 #ifdef OWL_ENABLE_POSTGRESQL
     EXPECT_FALSE(c.psql);
 #endif
@@ -160,6 +161,64 @@ TEST_F(EnvIsolated, AcceptsPortZero) {
     Args args{"-p", "0"};
     const auto c = owl::Config::make(args.argc(), args.argv());
     EXPECT_EQ(c.port, 0);
+}
+
+TEST_F(EnvIsolated, TlsFromEnv) {
+    setenv("OWL_TLS_CERT", "/etc/owl/cert.pem", 1);
+    setenv("OWL_TLS_KEY", "/etc/owl/key.pem", 1);
+    Args args{};
+    const auto c = owl::Config::make(args.argc(), args.argv());
+    ASSERT_TRUE(c.tls);
+    EXPECT_EQ(c.tls->cert, "/etc/owl/cert.pem");
+    EXPECT_EQ(c.tls->key, "/etc/owl/key.pem");
+}
+
+TEST_F(EnvIsolated, TlsFromCli) {
+    Args args{"--tls-cert", "cert.pem", "--tls-key", "key.pem"};
+    const auto c = owl::Config::make(args.argc(), args.argv());
+    ASSERT_TRUE(c.tls);
+    EXPECT_EQ(c.tls->cert, "cert.pem");
+    EXPECT_EQ(c.tls->key, "key.pem");
+}
+
+TEST_F(EnvIsolated, TlsCliOverridesEnvPerField) {
+    setenv("OWL_TLS_CERT", "env-cert.pem", 1);
+    setenv("OWL_TLS_KEY", "env-key.pem", 1);
+    Args args{"--tls-key", "cli-key.pem"};
+    const auto c = owl::Config::make(args.argc(), args.argv());
+    ASSERT_TRUE(c.tls);
+    EXPECT_EQ(c.tls->cert, "env-cert.pem");
+    EXPECT_EQ(c.tls->key, "cli-key.pem");
+}
+
+TEST_F(EnvIsolated, TlsPairMaySpanEnvAndCli) {
+    setenv("OWL_TLS_CERT", "env-cert.pem", 1);
+    Args args{"--tls-key", "cli-key.pem"};
+    const auto c = owl::Config::make(args.argc(), args.argv());
+    ASSERT_TRUE(c.tls);
+    EXPECT_EQ(c.tls->cert, "env-cert.pem");
+    EXPECT_EQ(c.tls->key, "cli-key.pem");
+}
+
+TEST_F(EnvIsolated, RejectsTlsCertWithoutKey) {
+    Args args{"--tls-cert", "cert.pem"};
+    EXPECT_THROW((void)owl::Config::make(args.argc(), args.argv()), std::invalid_argument);
+}
+
+TEST_F(EnvIsolated, RejectsTlsKeyWithoutCert) {
+    setenv("OWL_TLS_KEY", "key.pem", 1);
+    Args args{};
+    EXPECT_THROW((void)owl::Config::make(args.argc(), args.argv()), std::invalid_argument);
+}
+
+TEST_F(EnvIsolated, RejectsEmptyTlsPath) {
+    Args args{"--tls-cert", "", "--tls-key", "key.pem"};
+    EXPECT_THROW((void)owl::Config::make(args.argc(), args.argv()), std::invalid_argument);
+}
+
+TEST_F(EnvIsolated, RejectsTlsFlagWithoutValue) {
+    Args args{"--tls-key", "key.pem", "--tls-cert"};
+    EXPECT_THROW((void)owl::Config::make(args.argc(), args.argv()), std::invalid_argument);
 }
 
 #ifdef OWL_ENABLE_POSTGRESQL
