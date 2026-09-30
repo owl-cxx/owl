@@ -6,6 +6,7 @@
 // chooses the worker a client lands on.
 
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
@@ -75,6 +76,18 @@ namespace owl_test {
         ~LiveWorker() {
             stop.store(true);
             for (auto& pump : pumps) pump.join();
+            // A client that closed a moment ago may not have been noticed
+            // yet, and a connection still open holds a timer that
+            // h2o_evloop_destroy asserts on. Each loop runs on until its
+            // connections are gone; the bound is for a test that leaves a
+            // client open past its worker, which then fails as it used to.
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+            for (const auto& worker : workers) {
+                const auto& conns = worker->ctx._conns.num_conns;
+                while (conns.idle + conns.active + conns.shutdown != 0 && std::chrono::steady_clock::now() < deadline) {
+                    h2o_evloop_run(worker->ctx.loop, 5);
+                }
+            }
             workers.clear();
         }
 
