@@ -15,6 +15,11 @@ if (PROJECT_IS_TOP_LEVEL)
     # result, and clang only warns; here that is an error, for this
     # project's own tests and benches, never for a consumer.
     add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-Werror=return-type>)
+    # GCC makes a coroutine's symmetric transfer a real tail call only under
+    # this flag, which -O2 turns on and a Debug build lacks: without it every
+    # resume nests, and the 100'000-deep chain in Task.DeepAwaitChainStaysFlat
+    # overflows the stack. Clang guarantees the tail call at any level.
+    add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU>:-foptimize-sibling-calls>)
 endif ()
 
 option(OWL_ENABLE_PROMETHEUS "Build owl::prometheus (HTTP RED + scrape handler)" OFF)
