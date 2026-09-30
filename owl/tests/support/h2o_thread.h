@@ -12,5 +12,7 @@ namespace owl_test {
     inline void release_h2o_thread_caches() {
         h2o_buffer_clear_recycle(1);
         h2o_mem_clear_recycle(&h2o_mem_pool_allocator, 1);
+        h2o_mem_clear_recycle(&h2o_socket_ssl_buffer_allocator, 1);
+        h2o_mem_clear_recycle(&h2o_socket_zerocopy_buffer_allocator, 1);
     }
 }

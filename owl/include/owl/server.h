@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <csignal>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -127,6 +128,12 @@ namespace owl {
             const unsigned count = config_->threads == 0 ? 1 : config_->threads;
 
             ////////////////////////////////////////////////////////////////////////////////////////////////
+            // Before anything is bound: a certificate that cannot be loaded throws here, and no
+            // port has been taken that a cleartext listener would then hold.
+            ////////////////////////////////////////////////////////////////////////////////////////////////
+            if (config_->tls) tls_.emplace(*config_->tls);
+
+            ////////////////////////////////////////////////////////////////////////////////////////////////
             // One host on any port (65535): as the only registered host it doubles as h2o's fallback,
             // so every authority -- missing Host headers included -- resolves to it, and "/" matches
             // every path. Host and path dispatch are out of the way; routing belongs to the Router.
@@ -148,7 +155,7 @@ namespace owl {
             ////////////////////////////////////////////////////////////////////////////////////////////////
             workers_.reserve(count);
             for (unsigned i = 0; i < count; ++i) {
-                workers_.push_back(std::make_unique<detail::Worker>(&globalconf_.conf));
+                workers_.push_back(std::make_unique<detail::Worker>(&globalconf_.conf, tls_ ? tls_->get() : nullptr));
             }
             open_listeners();
         }
@@ -207,6 +214,9 @@ namespace owl {
         // Declared before workers_ so the workers, whose contexts point into
         // it, are torn down first and the config last.
         detail::GlobalConf globalconf_;
+        // Before workers_ for the same reason: every accept context points
+        // at it.
+        std::optional<detail::TlsContext> tls_;
         std::vector<std::unique_ptr<detail::Worker>> workers_;
         std::uint16_t bound_port_ = 0;
     };

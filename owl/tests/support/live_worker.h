@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -48,19 +49,22 @@ namespace owl_test {
     struct LiveWorker final {
         owl::MiddlewareChain<S> layers;
         owl::detail::GlobalConf globalconf;
+        std::optional<owl::detail::TlsContext> tls_context;
         std::vector<std::unique_ptr<owl::detail::Worker>> workers;
         std::atomic<bool> stop{false};
         std::vector<std::thread> pumps;
         std::vector<std::uint16_t> ports;
         std::uint16_t port = 0;
 
-        explicit LiveWorker(const owl::Router<S>& router, const std::size_t count = 1) {
+        explicit LiveWorker(const owl::Router<S>& router, const std::size_t count = 1, const owl::Tls* const tls = nullptr) {
             std::signal(SIGPIPE, SIG_IGN);
+            if (tls != nullptr) tls_context.emplace(*tls);
             auto* const host = h2o_config_register_host(&globalconf.conf, h2o_iovec_init(H2O_STRLIT("default")), 65535);
             auto* const path = h2o_config_register_path(host, "/", 0);
             (void)owl::detail::make_dispatcher<S>(path, &router, &layers, std::make_shared<S>(), {});
             for (std::size_t i = 0; i < count; ++i) {
-                auto& worker = *workers.emplace_back(std::make_unique<owl::detail::Worker>(&globalconf.conf));
+                auto& worker = *workers.emplace_back(std::make_unique<owl::detail::Worker>(
+                    &globalconf.conf, tls_context ? tls_context->get() : nullptr));
                 const int fd = listen_loopback();
                 ports.push_back(owl::detail::port_of(fd));
                 worker.listener = h2o_evloop_socket_create(worker.ctx.loop, fd, H2O_SOCKET_FLAG_DONT_READ);

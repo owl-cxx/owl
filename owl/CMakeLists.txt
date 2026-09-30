@@ -177,6 +177,7 @@ if (BUILD_TESTING)
     owl_add_test(test_ws_router)
     owl_add_test(test_ws)
     owl_add_test(test_http2)
+    owl_add_test(test_tls)
 
     if (OWL_ENABLE_PROMETHEUS)
         owl_add_test(test_prometheus_dispatch)

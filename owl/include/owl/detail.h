@@ -3,9 +3,13 @@
 #include <memory>
 #include <netinet/in.h>
 #include <new>
+#include <stdexcept>
+#include <string>
 #include <sys/socket.h>
 
 #include <h2o.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 
 #include "coro/task.h"
 #include "owl/coro/loop_scheduler.h"
@@ -35,6 +39,74 @@ namespace owl::detail {
         GlobalConf& operator=(const GlobalConf&) = delete;
     };
 
+    // The SSL_CTX a TLS server accepts with. One for the whole server: a
+    // handshake only reads it, so every worker shares it, and it has to
+    // outlive them. Everything that can be wrong with the files is found
+    // here, which is how a bad certificate fails build_with rather than the
+    // first connection.
+    class TlsContext final {
+    public:
+        explicit TlsContext(const Tls& tls) {
+            if (tls.cert.empty() || tls.key.empty()) {
+                throw std::invalid_argument("owl::Server: tls needs both a certificate and a key");
+            }
+            ctx_.reset(SSL_CTX_new(TLS_server_method()));
+            if (!ctx_) throw std::runtime_error("owl::Server: cannot create a tls context");
+            SSL_CTX_set_min_proto_version(ctx_.get(), TLS1_2_VERSION);
+            // Left alone, OpenSSL asks the terminal for a protected key's
+            // passphrase, and a server started by a supervisor then waits
+            // for an answer nobody can type. Refusing makes it an error.
+            SSL_CTX_set_default_passwd_cb(ctx_.get(), [](char*, int, int, void*) {
+                return -1;
+            });
+
+            ERR_clear_error();
+            if (SSL_CTX_use_certificate_chain_file(ctx_.get(), tls.cert.c_str()) != 1) {
+                throw failure("cannot load tls certificate " + tls.cert);
+            }
+            if (SSL_CTX_use_PrivateKey_file(ctx_.get(), tls.key.c_str(), SSL_FILETYPE_PEM) != 1) {
+                throw failure("cannot load tls key " + tls.key);
+            }
+            if (SSL_CTX_check_private_key(ctx_.get()) != 1) {
+                throw failure("tls key " + tls.key + " does not belong to certificate " + tls.cert);
+            }
+
+            // http/1.1 and nothing else. Offered h2, a browser would open a
+            // WebSocket as an extended CONNECT -- h2o advertises support for
+            // it on every HTTP/2 connection -- and owl answers that with 404.
+            // h2o keeps the pointer, hence static.
+            static const h2o_iovec_t protocols[] = {
+                {.base = const_cast<char*>("http/1.1"), .len = 8},
+                {.base = nullptr, .len = 0},
+            };
+            h2o_ssl_register_alpn_protocols(ctx_.get(), protocols);
+        }
+
+        [[nodiscard]] SSL_CTX* get() const noexcept {
+            return ctx_.get();
+        }
+
+    private:
+        struct Free final {
+            void operator()(SSL_CTX* const ctx) const noexcept {
+                SSL_CTX_free(ctx);
+            }
+        };
+
+        // OpenSSL's own reason goes into the message: "no such file" and
+        // "bad decrypt" send an operator to different places.
+        [[nodiscard]] static std::runtime_error failure(const std::string& what) {
+            char reason[256] = "unknown error";
+            if (const unsigned long code = ERR_peek_last_error(); code != 0) {
+                ERR_error_string_n(code, reason, sizeof(reason));
+            }
+            ERR_clear_error();
+            return std::runtime_error("owl::Server: " + what + ": " + reason);
+        }
+
+        std::unique_ptr<SSL_CTX, Free> ctx_;
+    };
+
     // One worker: its context, the loop that context runs on, and the
     // listener once one is opened. It is torn down in the reverse of how it
     // was built, and it has to die before the config its context points at.
@@ -43,10 +115,13 @@ namespace owl::detail {
         h2o_accept_ctx_t accept_ctx{};
         h2o_socket_t* listener = nullptr;
 
-        explicit Worker(h2o_globalconf_t* const conf) {
+        // A non-null tls makes h2o_accept handshake before it reads a
+        // request; the context belongs to the server and outlives the worker.
+        explicit Worker(h2o_globalconf_t* const conf, SSL_CTX* const tls = nullptr) {
             h2o_context_init(&ctx, h2o_evloop_create(), conf);
             accept_ctx.ctx = &ctx;
             accept_ctx.hosts = conf->hosts;
+            accept_ctx.ssl_ctx = tls;
         }
 
         ~Worker() {
