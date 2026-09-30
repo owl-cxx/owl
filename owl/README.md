@@ -218,7 +218,7 @@ A handler that needs the name behind a request takes `HeaderView<"authorization"
 
 ## WebSocket
 
-A path takes a send/recv coroutine or a shared controller. Extractors run before the upgrade — the request is gone at 101 — so they must own their values (`Path<"n", std::string>`, not `PathView`). `const T&` is allowed only for driver and loop refs, which outlive the connection on their worker. `owl::get` and `.ws` may share a pattern; a GET without Upgrade on a WS-only path is 404. A handshake that offers a version other than 13 gets 426 with `Sec-WebSocket-Version: 13`; a missing or malformed key gets 400. One controller instance is built at registration and reached from every worker, so it must be safe for concurrent use, the same contract `State<T>` carries. A `Socket` may be copied, kept (in a map, say) and sent to from any worker: a send from another thread is posted to the connection's own worker, and a send or close on a connection that has ended does nothing. `recv()` belongs to the connection's handler, on its own worker. `send` is awaitable so it can gain backpressure later; until then, a connection with more than 64 MiB queued for its peer is dropped. Reading pauses while a handler has 16 MiB of messages it has not taken, and one inbound message may be at most 16 MiB (1009 past it). A connection that goes quiet for 30 s is pinged, and dropped if nothing comes back within another 30 s; the same bound ends a close handshake the peer never answers.
+A path takes a send/recv coroutine or a shared controller. Extractors run before the upgrade — the request is gone at 101 — so they must own their values (`Path<"n", std::string>`, not `PathView`). `const T&` is allowed only for driver and loop refs, which outlive the connection on their worker. `owl::get` and `.ws` may share a pattern; a GET without Upgrade on a WS-only path is 404. A handshake that offers a version other than 13 gets 426 with `Sec-WebSocket-Version: 13`; a missing or malformed key gets 400. One controller instance is built at registration and reached from every worker, so it must be safe for concurrent use, the same contract `State<T>` carries. A `Socket` may be copied, kept (in a map, say) and sent to from any worker: a send from another thread is posted to the connection's own worker, and a send or close on a connection that has ended does nothing. `recv()` belongs to the connection's handler, on its own worker. `send` is awaitable so it can gain backpressure later; until then, a connection with more than 64 MiB queued for its peer is dropped. Reading pauses while a handler has 16 MiB of messages it has not taken, and one inbound message may be at most 16 MiB (1009 past it). A connection that goes quiet for 30 s is pinged, and dropped if nothing comes back within another 30 s; the same bound ends a close handshake the peer never answers. WebSocket is served over HTTP/1.1 only; see Server for what an HTTP/2 client gets.
 
 A working echo, rooms, and chat page is [`examples/ws`](../examples/ws/README.md).
 
@@ -274,6 +274,8 @@ server.start();
 
 `router` is a `Router<S>`. `threads` starts N workers — Node cluster, in-process. Worker 0 runs on the calling thread; the rest are extra threads. Each worker is a single-threaded event loop with its own `SO_REUSEPORT` listener. They share the router. `.thread(N)` is the sanctioned post-config tweak; a second `.config()` throws because it would reset every field not repeated.
 
+One listener serves HTTP/1.1 and cleartext HTTP/2, both the `Upgrade: h2c` handshake and prior knowledge. h2o negotiates and frames; a handler sees the same `Request` either way, and `raw()->version` tells them apart (`0x101`, `0x200`). HTTP/2 over TLS arrives with TLS. WebSocket is HTTP/1.1 only: on an HTTP/2 connection a browser opens a WebSocket as an RFC 8441 extended CONNECT, which owl answers 404, and that is why TLS must not offer `h2` in ALPN before WebSocket over HTTP/2 lands (see Roadmap).
+
 `Config::make(argc, argv)` parses CLI over `OWL_*` env over defaults. Bad integers, unknown flags, leftover positionals, and empty values throw `std::invalid_argument`.
 
 | | env | flag | default |
@@ -317,13 +319,14 @@ Each box below is one turn of that worker's `h2o_evloop_run`:
 
 Not started. Each item should sit on `coro` + the event loop the way handlers already do — no extra thread pools, no blocking the worker.
 
-|                       | Sketch                                                                                |
-|-----------------------|---------------------------------------------------------------------------------------|
-| **WebSocket**         | In. Remaining: backpressure on `send`; controller extractors stay a declared `using Extractors` tuple (not deduced from `on_message`). |
-| **Redis**             | RESP client on `coro::native_reactor`. Extractor or `State<>` for a shared pool.      |
-| **Static files**      | Route that sendfiles a directory. Range requests later.                               |
-| **TLS**               | HTTPS as a `Server::Builder` switch; h2o already links OpenSSL.                       |
-| **Graceful shutdown** | Stop listeners, drain in-flight handlers, then join workers.                          |
+|                           | Sketch                                                                                |
+|---------------------------|---------------------------------------------------------------------------------------|
+| **WebSocket**             | In. Remaining: backpressure on `send`; controller extractors stay a declared `using Extractors` tuple (not deduced from `on_message`). |
+| **Redis**                 | RESP client on `coro::native_reactor`. Extractor or `State<>` for a shared pool.      |
+| **Static files**          | Route that sendfiles a directory. Range requests later.                               |
+| **TLS**                   | HTTPS as a `Server::Builder` switch; h2o already links OpenSSL. ALPN offers `http/1.1` only until WebSocket over HTTP/2 exists: h2o advertises extended CONNECT unconditionally, so a browser on `h2` would open every WebSocket as one and get 404. |
+| **WebSocket over HTTP/2** | RFC 8441: take the extended CONNECT as the Upgrade slot and run the frame engine over the stream's DATA frames instead of the socket `h2o_http1_upgrade` hands back. Then TLS can offer `h2`. |
+| **Graceful shutdown**     | Stop listeners, drain in-flight handlers, then join workers.                          |
 
 ---
 
