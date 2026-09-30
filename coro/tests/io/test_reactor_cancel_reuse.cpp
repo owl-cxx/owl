@@ -35,13 +35,21 @@ namespace {
     };
     static_assert(sizeof(header) == 16);
 
-    // The one block per thread freed last. The final one a thread keeps is
-    // never returned, which a test binary can afford.
-    thread_local header* spare = nullptr;
+    // The one block per thread freed last, returned when the thread ends.
+    // The reactor thread frees its own std::thread state as its last act, so
+    // without an owner that block would be kept by a thread that is gone.
+    struct spare_slot final {
+        header* block = nullptr;
+
+        ~spare_slot() {
+            std::free(std::exchange(block, nullptr));
+        }
+    };
+    thread_local spare_slot spare;
 }
 
 void* operator new(const std::size_t size) {
-    if (spare != nullptr && spare->size == size) return std::exchange(spare, nullptr) + 1;
+    if (spare.block != nullptr && spare.block->size == size) return std::exchange(spare.block, nullptr) + 1;
     auto* const h = static_cast<header*>(std::malloc(sizeof(header) + size));
     if (h == nullptr) throw std::bad_alloc{};
     h->size = size;
@@ -50,10 +58,45 @@ void* operator new(const std::size_t size) {
 
 void operator delete(void* const p) noexcept {
     if (p == nullptr) return;
-    std::free(std::exchange(spare, static_cast<header*>(p) - 1));
+    std::free(std::exchange(spare.block, static_cast<header*>(p) - 1));
 }
 
 void operator delete(void* const p, std::size_t) noexcept {
+    operator delete(p);
+}
+
+// The remaining forms, which by default forward to the two above. A sanitizer
+// runtime intercepts each form on its own, and a block from its nothrow or
+// array new would then reach the delete above without a header in front.
+void* operator new(const std::size_t size, const std::nothrow_t&) noexcept {
+    try {
+        return operator new(size);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void* operator new[](const std::size_t size) {
+    return operator new(size);
+}
+
+void* operator new[](const std::size_t size, const std::nothrow_t& tag) noexcept {
+    return operator new(size, tag);
+}
+
+void operator delete(void* const p, const std::nothrow_t&) noexcept {
+    operator delete(p);
+}
+
+void operator delete[](void* const p) noexcept {
+    operator delete(p);
+}
+
+void operator delete[](void* const p, std::size_t) noexcept {
+    operator delete(p);
+}
+
+void operator delete[](void* const p, const std::nothrow_t&) noexcept {
     operator delete(p);
 }
 
