@@ -91,6 +91,12 @@ TEST(Task, CoReturnConvertsArgumentType) {
 }
 
 TEST(Task, DeepAwaitChainStaysFlat) {
+#if defined(__SANITIZE_ADDRESS__) && !defined(__clang__)
+    // Symmetric transfer is flat only if the compiler makes the resume a
+    // tail call, and GCC makes none out of an ASan-instrumented frame, at
+    // any optimization level. The chain nests there whatever task does.
+    GTEST_SKIP() << "gcc does not tail-call out of an ASan-instrumented frame";
+#endif
     EXPECT_EQ(coro::sync_wait(chain(100'000)), 7);
 }
 
