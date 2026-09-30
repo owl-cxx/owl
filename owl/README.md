@@ -274,7 +274,13 @@ server.start();
 
 `router` is a `Router<S>`. `threads` starts N workers — Node cluster, in-process. Worker 0 runs on the calling thread; the rest are extra threads. Each worker is a single-threaded event loop with its own `SO_REUSEPORT` listener. They share the router. `.thread(N)` is the sanctioned post-config tweak; a second `.config()` throws because it would reset every field not repeated.
 
-One listener serves HTTP/1.1 and cleartext HTTP/2, both the `Upgrade: h2c` handshake and prior knowledge. h2o negotiates and frames; a handler sees the same `Request` either way, and `raw()->version` tells them apart (`0x101`, `0x200`). HTTP/2 over TLS arrives with TLS. WebSocket is HTTP/1.1 only: on an HTTP/2 connection a browser opens a WebSocket as an RFC 8441 extended CONNECT, which owl answers 404, and that is why TLS must not offer `h2` in ALPN before WebSocket over HTTP/2 lands (see Roadmap).
+Without `tls`, one listener serves HTTP/1.1 and cleartext HTTP/2, both the `Upgrade: h2c` handshake and prior knowledge. h2o negotiates and frames; a handler sees the same `Request` either way, and `raw()->version` tells them apart (`0x101`, `0x200`). WebSocket is HTTP/1.1 only: on an HTTP/2 connection a browser opens a WebSocket as an RFC 8441 extended CONNECT, which owl answers 404.
+
+```cpp
+.config({.port = 8443, .tls = {{.cert = "fullchain.pem", .key = "privkey.pem"}}})
+```
+
+With `tls`, the listener speaks TLS and nothing else: HTTPS and `wss://` on that port, no cleartext beside it. `cert` is a PEM file with the leaf certificate first and its chain after it; `key` is the leaf's PEM private key. Both are loaded in `build_with`, before the port is bound, so a missing file, a key that is not the certificate's, or a key behind a passphrase throws `std::runtime_error` there with OpenSSL's reason. A passphrase is refused rather than asked for: nobody is at a server's terminal. TLS 1.2 is the minimum. ALPN answers `http/1.1` only, so a TLS connection is never HTTP/2: offered `h2`, a browser would open every WebSocket as the extended CONNECT above. That waits on WebSocket over HTTP/2 (see Roadmap). The files are read once; a renewed certificate needs a restart.
 
 `Config::make(argc, argv)` parses CLI over `OWL_*` env over defaults. Bad integers, unknown flags, leftover positionals, and empty values throw `std::invalid_argument`.
 
@@ -284,11 +290,13 @@ One listener serves HTTP/1.1 and cleartext HTTP/2, both the `Upgrade: h2c` hands
 | port | `OWL_PORT` | `-p` / `--port` | `8080` |
 | workers | `OWL_THREADS` | `-t` / `--threads` | `1` |
 | listen backlog | `OWL_BACKLOG` | `-b` / `--backlog` | `1024` |
+| tls certificate chain (PEM file) | `OWL_TLS_CERT` | `--tls-cert` | unset |
+| tls private key (PEM file) | `OWL_TLS_KEY` | `--tls-key` | unset |
 | postgres DSN | `OWL_PG` | `--pg` | unset |
 | sqlite path | `OWL_SQLITE` | `--sqlite` | unset |
 | redis `host` or `host:port` | `OWL_REDIS` | `--redis` | unset |
 
-Driver fields are `std::optional` and exist only under their `OWL_ENABLE_*` macros. Unset means the extractor kicks 500, not a connection to localhost.
+The TLS pair is set together or not at all, from either source: one without the other throws. Driver fields are `std::optional` and exist only under their `OWL_ENABLE_*` macros. Unset means the extractor kicks 500, not a connection to localhost.
 
 Do not block the loop. Offload with a pool; `co_await loop.schedule()` or `loop.post(handle)` hops back (Node's `setImmediate` from another thread). Resume is always on the **same** worker.
 
@@ -324,7 +332,7 @@ Not started. Each item should sit on `coro` + the event loop the way handlers al
 | **WebSocket**             | In. Remaining: backpressure on `send`; controller extractors stay a declared `using Extractors` tuple (not deduced from `on_message`). |
 | **Redis**                 | RESP client on `coro::native_reactor`. Extractor or `State<>` for a shared pool.      |
 | **Static files**          | Route that sendfiles a directory. Range requests later.                               |
-| **TLS**                   | HTTPS as a `Server::Builder` switch; h2o already links OpenSSL. ALPN offers `http/1.1` only until WebSocket over HTTP/2 exists: h2o advertises extended CONNECT unconditionally, so a browser on `h2` would open every WebSocket as one and get 404. |
+| **TLS**                   | In: `Config::tls` serves HTTPS and `wss://`. Remaining: `h2` in ALPN, which waits on WebSocket over HTTP/2 because h2o advertises extended CONNECT unconditionally and a browser on `h2` would open every WebSocket as one and get 404; taking up a renewed certificate without a restart; client certificates. |
 | **WebSocket over HTTP/2** | RFC 8441: take the extended CONNECT as the Upgrade slot and run the frame engine over the stream's DATA frames instead of the socket `h2o_http1_upgrade` hands back. Then TLS can offer `h2`. |
 | **Graceful shutdown**     | Stop listeners, drain in-flight handlers, then join workers.                          |
 

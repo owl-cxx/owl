@@ -49,6 +49,8 @@ Bind knobs and drivers are `owl::Config::make` (CLI > `OWL_*` env > defaults). T
 | `OWL_PORT` / `--port` / `-p` | `8080` | |
 | `OWL_THREADS` / `--threads` / `-t` | `1` | compose uses `4` |
 | `OWL_BACKLOG` / `--backlog` / `-b` | `1024` | |
+| `OWL_TLS_CERT` / `--tls-cert` | unset | PEM certificate chain; set with `OWL_TLS_KEY`, the port serves HTTPS and nothing else |
+| `OWL_TLS_KEY` / `--tls-key` | unset | the certificate's PEM private key, without a passphrase |
 | `OWL_PG` / `--pg` | `postgres://localhost/rest` | the postgres DSN; the schema is created if missing |
 | `OWL_REDIS` / `--redis` | `127.0.0.1:6379` | `host` or `host:port` of the Redis server |
 
