@@ -1,4 +1,4 @@
-#pragma clang diagnostic error "-Wunused-result"
+#pragma GCC diagnostic error "-Wunused-result"
 
 #include <owl/server.h>
 
