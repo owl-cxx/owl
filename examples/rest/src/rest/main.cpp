@@ -45,9 +45,10 @@ int main(int argc, char** argv) {
                                           .config(cfg)
                                           .build_with(std::make_shared<rest::AppState>());
 
-    std::printf("listening on http://%s:%u  (postgres: %s, redis: %s:%u)\n"
+    std::printf("listening on %s://%s:%u  (postgres: %s, redis: %s:%u)\n"
                 "  POST /auth/register\n  POST /auth/login\n  GET  /posts\n  POST /posts  (Authorization: Bearer <token>)\n  GET  /posts/{id}\n",
-                cfg.address.c_str(), server.port(), cfg.psql->dsn.c_str(), cfg.redis->host.c_str(), cfg.redis->port);
+                cfg.tls ? "https" : "http", cfg.address.c_str(), server.port(), cfg.psql->dsn.c_str(), cfg.redis->host.c_str(),
+                cfg.redis->port);
     std::fflush(stdout);
     server.start();
 }

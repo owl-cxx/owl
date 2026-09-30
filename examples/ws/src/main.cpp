@@ -98,8 +98,8 @@ int main(int argc, char** argv) {
                                     .config(cfg)
                                     .build_with(std::make_shared<AppState>());
 
-    std::printf("listening on http://%s:%u\n  GET  /chat\n  WS   /chat/{room}\n  WS   /rooms/{id}\n  WS   /echo/{user}\n",
-                cfg.address.c_str(), server.port());
+    std::printf("listening on %s://%s:%u\n  GET  /chat\n  WS   /chat/{room}\n  WS   /rooms/{id}\n  WS   /echo/{user}\n",
+                cfg.tls ? "https" : "http", cfg.address.c_str(), server.port());
     std::fflush(stdout);
     server.start();
 }
