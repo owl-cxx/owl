@@ -18,6 +18,18 @@ appeals, adding a test for an untested path is always worth doing.
 
 ## Build
 
+The quickest way to a working build is the image CI runs in,
+`ghcr.io/owl-cxx/owl-dev`: Ubuntu 24.04 with GCC 14, CMake 4.3, Ninja,
+libh2o-evloop, and every optional driver already installed.
+[`docker/dev.Dockerfile`](docker/dev.Dockerfile) is its recipe.
+
+```sh
+docker run --rm -it -v "$PWD:/src" -w /src ghcr.io/owl-cxx/owl-dev
+```
+
+From inside it, go straight to the `cmake` commands below. Everything between
+here and there is for building on the host.
+
 C++23, CMake **4.3**, and a compiler with working `<expected>` and
 floating-point `from_chars`. On Linux that means **GCC 14**: Ubuntu's clang 18
 reports `__cpp_concepts` below what libstdc++'s `<expected>` demands, and
