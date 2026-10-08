@@ -40,12 +40,12 @@ Self-contained, with a clear definition of done. Each was noted as
 deliberately out of scope when the surrounding work shipped, so the shape of
 the gap is already understood.
 
-- **`HEAD` → `GET` fallback.** A `HEAD` request to a route with only a `GET`
+- **`HEAD` → `GET` fallback** ([#1](https://github.com/owl-cxx/owl/issues/1)). A `HEAD` request to a route with only a `GET`
   handler is not served. Left out of the OPTIONS fallback work on purpose.
-- **Preflight to an unregistered path is a bare 404.** No layer chain runs on
+- **Preflight to an unregistered path is a bare 404** ([#2](https://github.com/owl-cxx/owl/issues/2)). No layer chain runs on
   a 404, so a CORS preflight to a path that does not exist gets no CORS
   headers. Whether that is worth changing is part of the issue.
-- **Ranges fallbacks for Apple libc++ 21.** It has no `views::chunk`,
+- **Ranges fallbacks for Apple libc++ 21** ([#3](https://github.com/owl-cxx/owl/issues/3)). It has no `views::chunk`,
   `views::stride`, or `views::enumerate`. `util/base64.h` works around their
   absence by hand; the workaround is not shared, and the next place that wants
   one will repeat it.
@@ -53,10 +53,10 @@ the gap is already understood.
 ## Infrastructure
 
 - [x] MIT license, contributing guide
-- [ ] CI on Linux: default options, all libraries with live postgres and
+- [x] CI on Linux: default options, all libraries with live postgres and
       redis, ASan, and an end-to-end monkey test against `examples/rest`
-- [ ] A prebuilt dev image so contributors do not have to build libh2o-evloop
-      by hand
+- [x] A prebuilt dev image so contributors do not have to build libh2o-evloop
+      by hand: `ghcr.io/owl-cxx/owl-dev`
 - [ ] macOS CI. Deferred: there is no prebuilt image for it and h2o would need
       a source build on every run.
 - [ ] Tagged releases. Not until the API stops moving.
